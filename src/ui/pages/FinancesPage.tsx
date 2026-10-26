@@ -35,7 +35,7 @@ function FlowDialog({ initial, scenario, onClose }: { initial: FlowItem; scenari
   const isNew = !scenario.flows.some((x) => x.id === f.id);
   const members = memberOptions(scenario);
   const save = () => {
-    const e = validateFlow(f);
+    const e = validateFlow(f, scenario);
     setErrors(e);
     if (Object.keys(e).length > 0) return;
     const clean: FlowItem = f.frequency === 'monthly' ? (({ months: _m, ...r }) => (void _m, r))(f) : f;

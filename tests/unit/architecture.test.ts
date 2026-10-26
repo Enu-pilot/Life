@@ -1,6 +1,6 @@
 // 層分離の検査（architecture.md §2）。ESLint の import 制約の代わりにテストで機械的に確認する。
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = join(__dirname, '../../src');
@@ -22,7 +22,9 @@ describe('層分離', () => {
     const bad: string[] = [];
     for (const f of files(join(ROOT, 'engine'))) {
       for (const i of imports(f)) {
-        const ok = i.startsWith('./') || i.startsWith('../domain/') || (i.startsWith('../') && !i.startsWith('../ui') && !i.startsWith('../app') && !i.startsWith('../storage') && !i.startsWith('../../'));
+        // 相対 import は解決して src/engine か src/domain 内であること。パッケージ import は禁止
+        const target = i.startsWith('.') ? relative(ROOT, resolve(dirname(f), i)) : null;
+        const ok = target !== null && (target.startsWith('engine') || target.startsWith('domain'));
         if (!ok) bad.push(`${relative(ROOT, f)} → ${i}`);
       }
       const src = readFileSync(f, 'utf8');

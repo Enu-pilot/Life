@@ -1,0 +1,220 @@
+{
+ "id": "g",
+ "name": "G-02-invest-loans-pension",
+ "createdAt": "2026-01-01T00:00:00.000Z",
+ "updatedAt": "2026-01-01T00:00:00.000Z",
+ "members": [
+  {
+   "id": "me",
+   "role": "self",
+   "name": "本人",
+   "birthYm": "1990-01"
+  }
+ ],
+ "flows": [
+  {
+   "id": "salary",
+   "direction": "income",
+   "name": "salary",
+   "category": "salary",
+   "amount": 350000,
+   "frequency": "monthly",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "fixed",
+    "rate": 0.015
+   },
+   "growthBase": "itemStart",
+   "growthStepMonth": 4
+  },
+  {
+   "id": "rehire",
+   "direction": "income",
+   "name": "rehire",
+   "category": "salary",
+   "amount": 200000,
+   "frequency": "monthly",
+   "start": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60
+   },
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 65,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "none"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "pension",
+   "direction": "income",
+   "name": "pension",
+   "category": "pension",
+   "amount": 150000,
+   "frequency": "monthly",
+   "start": {
+    "type": "age",
+    "memberId": "me",
+    "age": 65
+   },
+   "end": null,
+   "growth": {
+    "type": "fixed",
+    "rate": 0.005
+   },
+   "growthBase": "start",
+   "growthStepMonth": 4
+  },
+  {
+   "id": "living",
+   "direction": "expense",
+   "name": "living",
+   "category": "living",
+   "amount": 220000,
+   "frequency": "monthly",
+   "start": null,
+   "end": null,
+   "growth": {
+    "type": "inflation"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "travel",
+   "direction": "expense",
+   "name": "travel",
+   "category": "leisure",
+   "amount": 300000,
+   "frequency": "months",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 80,
+    "endMode": "through"
+   },
+   "growth": {
+    "type": "inflation"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1,
+   "months": [
+    8
+   ]
+  }
+ ],
+ "transfers": [
+  {
+   "id": "tsumitate",
+   "name": "積立",
+   "fromId": "cash",
+   "toId": "inv",
+   "amount": 30000,
+   "frequency": "monthly",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "none"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "torikuzushi",
+   "name": "取崩",
+   "fromId": "inv",
+   "toId": "cash",
+   "amount": 100000,
+   "frequency": "monthly",
+   "start": {
+    "type": "age",
+    "memberId": "me",
+    "age": 65
+   },
+   "end": null,
+   "growth": {
+    "type": "inflation"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  }
+ ],
+ "events": [],
+ "assumptions": {
+  "startYm": "2027-01",
+  "endAge": 90,
+  "inflationRate": 0.01,
+  "defaultReturnRate": 0.03,
+  "autoLiquidate": false
+ },
+ "accounts": [
+  {
+   "id": "cash",
+   "kind": "cash",
+   "name": "cash",
+   "openingBalance": 3000000,
+   "annualRate": 0
+  },
+  {
+   "id": "inv",
+   "kind": "investment",
+   "name": "inv",
+   "openingBalance": 2000000,
+   "annualRate": 0.03
+  },
+  {
+   "id": "sav",
+   "kind": "savings",
+   "name": "sav",
+   "openingBalance": 1000000,
+   "annualRate": 0.002
+  },
+  {
+   "id": "land",
+   "kind": "other_asset",
+   "name": "land",
+   "openingBalance": 5000000,
+   "annualRate": -0.01
+  },
+  {
+   "id": "carloan",
+   "kind": "loan",
+   "name": "carloan",
+   "openingBalance": 1200000,
+   "annualRate": 0.025,
+   "loan": {
+    "remainingMonths": 48,
+    "method": "equal_payment"
+   }
+  },
+  {
+   "id": "eduloan",
+   "kind": "loan",
+   "name": "eduloan",
+   "openingBalance": 600000,
+   "annualRate": 0.01,
+   "loan": {
+    "remainingMonths": 60,
+    "method": "equal_principal"
+   }
+  }
+ ]
+}

@@ -1,9 +1,10 @@
 import { Link } from 'react-router';
 import { formatMoney, formatYmJa } from '../../domain/format';
-import { ageAt, parseYm } from '../../domain/time';
-import { useActiveScenario, useAppStore, useData, useUnit } from '../AppContext';
+import { ageAt, formatYm, parseYm } from '../../domain/time';
+import { useActiveScenario, useData, useUnit } from '../AppContext';
 import { Banner, Disclaimer } from '../components/common';
-import { monthlyEquivalent } from '../scenarioView';
+import { Issues } from '../components/Issues';
+import { useSimulation, type OkResult } from '../useSimulation';
 
 function GettingStarted() {
   return (
@@ -25,17 +26,58 @@ function GettingStarted() {
   );
 }
 
+/** 本人が指定年齢の年の年末時点の純資産 */
+export function netWorthAtAge(r: OkResult, age: number): { value: number; year: number } | null {
+  const y = r.yearly.find((x) => x.ages[r.selfId] === age);
+  return y ? { value: y.netWorth, year: y.year } : null;
+}
+
+function ageLabel(r: OkResult, m: number): string {
+  const b = r.births[r.selfId];
+  return b === undefined ? '' : `（本人 ${ageAt(b, m)}歳）`;
+}
+
+export function SummaryCards({ result, unit }: { result: OkResult; unit: 'yen' | 'man' }) {
+  const at65 = netWorthAtAge(result, 65);
+  const sf = result.metrics.shortfall;
+  return (
+    <section className="cards" aria-label="主要指標">
+      <div className="stat">
+        <div className="stat__label">開始時点の純資産</div>
+        <div className="stat__value">{formatMoney(result.metrics.startNetWorth, unit)}</div>
+      </div>
+      <div className="stat">
+        <div className="stat__label">65歳の年末の純資産（予測）</div>
+        <div className="stat__value">{at65 ? formatMoney(at65.value, unit) : '—'}</div>
+        <div className="stat__sub">{at65 ? `${at65.year}年` : '計算期間外'}</div>
+      </div>
+      <div className="stat">
+        <div className="stat__label">計算終了時の純資産（予測）</div>
+        <div className="stat__value">{formatMoney(result.metrics.endNetWorth, unit)}</div>
+        <div className="stat__sub">
+          {formatYmJa(formatYm(result.end))}
+          {ageLabel(result, result.end)}／うち金融資産 {formatMoney(result.metrics.endFinancialAssets, unit)}
+        </div>
+      </div>
+      <div className={`stat${sf.firstMonth !== null ? ' stat--alert' : ''}`}>
+        <div className="stat__label">資金不足</div>
+        <div className="stat__value">{sf.firstMonth === null ? 'なし' : `${formatYmJa(formatYm(sf.firstMonth))}〜`}</div>
+        <div className="stat__sub">
+          {sf.firstMonth === null
+            ? `最低残高 ${formatMoney(result.metrics.minCash.amount, unit)}${ageLabel(result, result.metrics.minCash.month)}`
+            : `${ageLabel(result, sf.firstMonth)} 最大不足 ${formatMoney(sf.maxAmount, unit)}・${sf.months}か月`}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function DashboardPage() {
   const data = useData();
   const scenario = useActiveScenario();
   const unit = useUnit();
-  useAppStore();
+  const result = useSimulation(scenario);
   const self = scenario.members.find((m) => m.role === 'self');
-  const start = parseYm(scenario.assumptions.startYm);
-  const income = scenario.flows.filter((f) => f.direction === 'income').reduce((s, f) => s + monthlyEquivalent(f), 0);
-  const expense = scenario.flows.filter((f) => f.direction === 'expense').reduce((s, f) => s + monthlyEquivalent(f), 0);
-  const assets = scenario.accounts.filter((a) => a.kind !== 'loan').reduce((s, a) => s + a.openingBalance, 0);
-  const debts = scenario.accounts.filter((a) => a.kind === 'loan').reduce((s, a) => s + a.openingBalance, 0);
 
   return (
     <div className="page">
@@ -46,28 +88,21 @@ export function DashboardPage() {
           まだバックアップ（エクスポート）が作成されていません。ブラウザのデータ消去に備えて <Link to="/data">データ管理</Link> から定期的にエクスポートしてください。
         </Banner>
       )}
-      <section className="cards">
-        <div className="stat">
-          <div className="stat__label">世帯</div>
-          <div className="stat__value">{scenario.members.length}人</div>
-          <div className="stat__sub">{self ? `本人 ${ageAt(parseYm(self.birthYm), start)}歳（${formatYmJa(scenario.assumptions.startYm)}時点）` : '本人未登録'}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">登録済みの収入（月額換算・入力値）</div>
-          <div className="stat__value">{formatMoney(Math.round(income), unit)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">登録済みの支出（月額換算・入力値）</div>
-          <div className="stat__value">{formatMoney(Math.round(expense), unit)}</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">開始時点の純資産</div>
-          <div className="stat__value">{formatMoney(assets - debts, unit)}</div>
-          <div className="stat__sub">
-            資産 {formatMoney(assets, unit)} / 負債 {formatMoney(debts, unit)}
-          </div>
-        </div>
-      </section>
+      {self && <Issues issues={result.issues} compact />}
+      {result.ok && (
+        <>
+          <p className="muted">
+            シナリオ「{scenario.name}」／本人 {ageAt(parseYm(self!.birthYm), result.start)}歳（{formatYmJa(scenario.assumptions.startYm)}）から計算
+          </p>
+          <SummaryCards result={result} unit={unit} />
+          {result.metrics.shortfall.firstMonth !== null && (
+            <Banner kind="error">
+              {formatYmJa(formatYm(result.metrics.shortfall.firstMonth))}から生活口座がマイナスになる見込みです。<Link to="/projection">資産推移</Link>
+              の年次明細で原因を確認できます。
+            </Banner>
+          )}
+        </>
+      )}
       <Disclaimer />
     </div>
   );

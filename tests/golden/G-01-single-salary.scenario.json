@@ -1,0 +1,113 @@
+{
+ "id": "g",
+ "name": "G-01-single-salary",
+ "createdAt": "2026-01-01T00:00:00.000Z",
+ "updatedAt": "2026-01-01T00:00:00.000Z",
+ "members": [
+  {
+   "id": "me",
+   "role": "self",
+   "name": "本人",
+   "birthYm": "1990-01"
+  }
+ ],
+ "flows": [
+  {
+   "id": "salary",
+   "direction": "income",
+   "name": "salary",
+   "category": "salary",
+   "amount": 300000,
+   "frequency": "monthly",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "fixed",
+    "rate": 0.02
+   },
+   "growthBase": "start",
+   "growthStepMonth": 4
+  },
+  {
+   "id": "bonus",
+   "direction": "income",
+   "name": "bonus",
+   "category": "bonus",
+   "amount": 400000,
+   "frequency": "months",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "fixed",
+    "rate": 0.02
+   },
+   "growthBase": "start",
+   "growthStepMonth": 4,
+   "months": [
+    6,
+    12
+   ]
+  },
+  {
+   "id": "living",
+   "direction": "expense",
+   "name": "living",
+   "category": "living",
+   "amount": 200000,
+   "frequency": "monthly",
+   "start": null,
+   "end": null,
+   "growth": {
+    "type": "inflation"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "insurance",
+   "direction": "expense",
+   "name": "insurance",
+   "category": "insurance",
+   "amount": 15000,
+   "frequency": "monthly",
+   "start": null,
+   "end": {
+    "type": "date",
+    "ym": "2045-03"
+   },
+   "growth": {
+    "type": "none"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  }
+ ],
+ "transfers": [],
+ "events": [],
+ "assumptions": {
+  "startYm": "2027-01",
+  "endAge": 65,
+  "inflationRate": 0.015,
+  "defaultReturnRate": 0.03,
+  "autoLiquidate": false
+ },
+ "accounts": [
+  {
+   "id": "cash",
+   "kind": "cash",
+   "name": "cash",
+   "openingBalance": 1000000,
+   "annualRate": 0
+  }
+ ]
+}

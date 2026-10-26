@@ -1,0 +1,102 @@
+{
+ "id": "g",
+ "name": "G-05a-shortfall",
+ "createdAt": "2026-01-01T00:00:00.000Z",
+ "updatedAt": "2026-01-01T00:00:00.000Z",
+ "members": [
+  {
+   "id": "me",
+   "role": "self",
+   "name": "本人",
+   "birthYm": "1975-06"
+  }
+ ],
+ "flows": [
+  {
+   "id": "salary",
+   "direction": "income",
+   "name": "salary",
+   "category": "salary",
+   "amount": 280000,
+   "frequency": "monthly",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "none"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "pension",
+   "direction": "income",
+   "name": "pension",
+   "category": "pension",
+   "amount": 120000,
+   "frequency": "monthly",
+   "start": {
+    "type": "age",
+    "memberId": "me",
+    "age": 65
+   },
+   "end": null,
+   "growth": {
+    "type": "none"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "living",
+   "direction": "expense",
+   "name": "living",
+   "category": "living",
+   "amount": 290000,
+   "frequency": "monthly",
+   "start": null,
+   "end": null,
+   "growth": {
+    "type": "inflation"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  }
+ ],
+ "transfers": [],
+ "events": [],
+ "assumptions": {
+  "startYm": "2027-01",
+  "endAge": 70,
+  "inflationRate": 0.02,
+  "defaultReturnRate": 0.03,
+  "autoLiquidate": false
+ },
+ "accounts": [
+  {
+   "id": "cash",
+   "kind": "cash",
+   "name": "cash",
+   "openingBalance": 500000,
+   "annualRate": 0
+  },
+  {
+   "id": "sav",
+   "kind": "savings",
+   "name": "sav",
+   "openingBalance": 2000000,
+   "annualRate": 0.001
+  },
+  {
+   "id": "inv",
+   "kind": "investment",
+   "name": "inv",
+   "openingBalance": 3000000,
+   "annualRate": 0.04
+  }
+ ]
+}

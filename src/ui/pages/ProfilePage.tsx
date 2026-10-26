@@ -114,7 +114,7 @@ function AssumptionsForm({ scenario }: { scenario: Scenario }) {
           value={a.endAge}
           onChange={(endAge) => setA({ ...a, endAge })}
           error={errors.endAge}
-          hint="60〜110 歳。本人がこの年齢になる月の前月まで計算します"
+          hint="60〜110 歳。本人がこの年齢になる月まで計算します"
         />
         <PercentField
           label="物価上昇率（年率）"
