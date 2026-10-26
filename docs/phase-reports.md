@@ -36,7 +36,7 @@
 | コマンド | 結果 |
 |---|---|
 | `npx tsc -p .`（型検査） | 成功（エラー 0） |
-| `npx vitest run` | 9 ファイル 101 件すべて成功（domain・storage・store・UI・層分離） |
+| `npx vitest run` | 6 ファイル 101 件すべて成功（domain・storage・store・UI・層分離） |
 | `npx playwright test`（Chromium） | 2 件成功（入力→自動保存→再読み込みで保持、外部通信なし） |
 | `npm run build` | 成功 |
 
