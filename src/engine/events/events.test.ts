@@ -372,3 +372,17 @@ describe('複数イベントの組み合わせ', () => {
     expect(r.events.filter((e) => e.skipped)).toEqual([]);
   });
 });
+
+import { sampleScenario } from '../../domain/sample';
+import { parseAppData } from '../../domain/schema';
+
+describe('サンプルデータ', () => {
+  it('スキーマに適合し、警告なしで計算でき、不変条件が成立する', () => {
+    const s = sampleScenario(new Date('2026-10-26T00:00:00'));
+    expect(parseAppData({ app: 'lifeplan', schemaVersion: 1, savedAt: '', settings: { displayUnit: 'man' }, activeScenarioId: s.id, scenarios: [s] }).ok).toBe(true);
+    const r = ok(s);
+    expect(r.issues).toEqual([]);
+    expect(checkInvariants(r)).toEqual([]);
+    expect(r.events.every((e) => !e.skipped)).toBe(true);
+  });
+});

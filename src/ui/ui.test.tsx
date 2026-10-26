@@ -160,3 +160,56 @@ describe('人生イベントの画面', () => {
     expect(within(dialog).getAllByText('頭金は物件価格以下にしてください').length).toBeGreaterThan(0);
   });
 });
+
+describe('シナリオの複製・切り替え・比較', () => {
+  it('複製したシナリオを編集しても元は変わらず、比較画面に前提・指標・差分が表示される', async () => {
+    window.location.hash = '#/scenarios';
+    const { store } = await boot();
+    store.getState().updateActiveScenario((s) => ({
+      ...s,
+      name: '基準',
+      assumptions: { ...s.assumptions, startYm: '2027-01', endAge: 70 },
+      members: [{ id: 'me', role: 'self', name: '本人', birthYm: '1990-01' }],
+      flows: [
+        { id: 'in', direction: 'income', name: '給与', category: 'salary', amount: 300000, frequency: 'monthly', start: null, end: null, growth: { type: 'none' }, growthBase: 'start', growthStepMonth: 4 },
+        { id: 'out', direction: 'expense', name: '生活費', category: 'living', amount: 250000, frequency: 'monthly', start: null, end: null, growth: { type: 'none' }, growthBase: 'start', growthStepMonth: 1 },
+      ],
+    }));
+    const baseId = store.getState().data!.activeScenarioId;
+    const copyId = store.getState().duplicateScenario(baseId, '支出増');
+    store.getState().updateScenario(copyId, (s) => ({ ...s, flows: s.flows.map((f) => (f.direction === 'expense' ? { ...f, amount: 280000 } : f)) }));
+    const base = store.getState().data!.scenarios.find((s) => s.id === baseId)!;
+    expect(base.flows.find((f) => f.direction === 'expense')!.amount).toBe(250000);
+
+    // 切り替えで再計算される（ヘッダのシナリオ選択）
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示中のシナリオ' }), baseId);
+    expect(store.getState().data!.activeScenarioId).toBe(baseId);
+
+    window.location.hash = `#/scenarios/compare?ids=${baseId},${copyId}`;
+    expect(await screen.findByRole('heading', { name: 'シナリオ比較' })).toBeInTheDocument();
+    const metrics = screen.getByTestId('compare-metrics');
+    // 終了時の純資産: 月の差 30,000 円 × 計算月数（2027-01〜2060-01 = 397 か月）= 11,910,000 円の差
+    // 生涯の支出: 基準 250,000 × 397 = 9,925.0 万円、支出増 280,000 × 397 = 11,116.0 万円
+    const lifeRow = within(metrics).getByText('生涯の支出').closest('tr')!;
+    expect(lifeRow).toHaveTextContent('9,925.0万円');
+    expect(lifeRow).toHaveTextContent('11,116.0万円');
+    const table = screen.getByTestId('compare-table');
+    const last = within(table).getAllByRole('row').at(-1)!;
+    expect(last).toHaveTextContent('−1,191.0万円');
+    expect(screen.getByRole('heading', { name: '前提条件と計算期間' })).toBeInTheDocument();
+  });
+
+  it('前提条件が異なると警告、2 件未満なら比較しない', async () => {
+    window.location.hash = '#/scenarios/compare?ids=nope';
+    const { store } = await boot();
+    expect(await screen.findByText(/2 件以上選んでください/)).toBeInTheDocument();
+    store.getState().updateActiveScenario((s) => ({ ...s, members: [{ id: 'me', role: 'self', name: '本人', birthYm: '1990-01' }] }));
+    const a = store.getState().data!.activeScenarioId;
+    const b = store.getState().duplicateScenario(a, 'B');
+    store.getState().updateScenario(b, (s) => ({ ...s, assumptions: { ...s.assumptions, inflationRate: 0.03 } }));
+    window.location.hash = `#/scenarios/compare?ids=${a},${b}`;
+    expect(await screen.findByText(/前提条件（物価上昇率）が異なります/)).toBeInTheDocument();
+    expect(screen.getByText(/収入・支出が未入力のため/)).toBeInTheDocument();
+  });
+});

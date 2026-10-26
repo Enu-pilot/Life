@@ -1,12 +1,14 @@
 import { Link } from 'react-router';
 import { formatMoney, formatYmJa } from '../../domain/format';
 import { ageAt, formatYm, parseYm } from '../../domain/time';
-import { useActiveScenario, useData, useUnit } from '../AppContext';
+import { useActiveScenario, useAppStore, useData, useUnit } from '../AppContext';
 import { Banner, Disclaimer } from '../components/common';
 import { Issues } from '../components/Issues';
 import { useSimulation, type OkResult } from '../useSimulation';
+import { AssetChart } from '../charts/Charts';
 
 function GettingStarted() {
+  const store = useAppStore();
   return (
     <section className="card">
       <h2>はじめに</h2>
@@ -21,6 +23,12 @@ function GettingStarted() {
           <Link to="/events">人生イベントを追加</Link>（結婚・出産・住宅購入など）
         </li>
       </ol>
+      <div className="actions">
+        <button type="button" className="btn" onClick={() => store.getState().addSampleScenario()}>
+          サンプルデータで試す
+        </button>
+        <span className="muted small">架空の世帯のシナリオを追加します（いつでも削除できます）。</span>
+      </div>
       <p className="muted small">データはこのブラウザ内にのみ保存され、外部に送信されません。</p>
     </section>
   );
@@ -95,6 +103,13 @@ export function DashboardPage() {
             シナリオ「{scenario.name}」／本人 {ageAt(parseYm(self!.birthYm), result.start)}歳（{formatYmJa(scenario.assumptions.startYm)}）から計算
           </p>
           <SummaryCards result={result} unit={unit} />
+          <section className="card">
+            <h2>資産推移（予測）</h2>
+            <AssetChart result={result} unit={unit} small />
+            <p className="legend-note">
+              詳しいグラフ・年次表・明細は <Link to="/projection">資産推移</Link> で確認できます。
+            </p>
+          </section>
           {result.metrics.shortfall.firstMonth !== null && (
             <Banner kind="error">
               {formatYmJa(formatYm(result.metrics.shortfall.firstMonth))}から生活口座がマイナスになる見込みです。<Link to="/projection">資産推移</Link>

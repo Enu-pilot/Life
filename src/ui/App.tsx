@@ -16,6 +16,7 @@ import { STAGE_LABELS } from '../storage/migrations';
 import { EventsPage } from './pages/EventsPage';
 import { ProjectionPage } from './pages/ProjectionPage';
 import { ScenariosPage } from './pages/ScenariosPage';
+import { ComparePage } from './pages/ComparePage';
 
 function CorruptScreen() {
   const corrupt = useApp((s) => s.corrupt);
@@ -96,6 +97,7 @@ function Shell() {
           <Route path="events" element={<EventsPage />} />
           <Route path="projection" element={<ProjectionPage />} />
           <Route path="scenarios" element={<ScenariosPage />} />
+          <Route path="scenarios/compare" element={<ComparePage />} />
           <Route path="data" element={<DataPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="*" element={<DashboardPage />} />

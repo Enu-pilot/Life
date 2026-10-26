@@ -532,10 +532,6 @@ fieldset.field {
 /* charts & timeline */
 .chart {
   width: 100%;
-  height: 360px;
-}
-.chart--small {
-  height: 220px;
 }
 .legend-note {
   font-size: 0.8rem;
@@ -582,4 +578,29 @@ fieldset.field {
 .best {
   font-weight: 700;
   color: var(--ok);
+}
+
+.stat--active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.25rem 0 0;
+  padding: 0 0 0 64px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.table th:first-child,
+.table td:first-child {
+  min-width: 6.5em;
 }

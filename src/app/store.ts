@@ -3,6 +3,7 @@
 
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { duplicateScenario, newAppData, newScenario } from '../domain/factory';
+import { sampleScenario } from '../domain/sample';
 import type { AppData, Scenario, Settings } from '../domain/schema';
 import type { MigrateResult } from '../storage/migrations';
 import type { BackupReason, Repository } from '../storage/repository';
@@ -28,6 +29,8 @@ export type AppState = {
   updateSettings(patch: Partial<Settings>): void;
   createScenario(name: string): string;
   duplicateScenario(id: string, name: string): string;
+  /** サンプルシナリオを追加して表示する */
+  addSampleScenario(): string;
   deleteScenario(id: string): void;
   /** インポート・復元・初期化。成功するまで画面の状態は変えない */
   replaceAll(next: AppData | null, reason: BackupReason): Promise<void>;
@@ -136,6 +139,11 @@ export function createAppStore(repo: Repository, opts: { now?: () => Date; debou
         const copy = duplicateScenario(src, name, now());
         mutate((d) => ({ ...d, scenarios: [...d.scenarios, copy], activeScenarioId: copy.id }));
         return copy.id;
+      },
+      addSampleScenario() {
+        const s = sampleScenario(now());
+        mutate((d) => ({ ...d, scenarios: [...d.scenarios, s], activeScenarioId: s.id }));
+        return s.id;
       },
       deleteScenario(id) {
         mutate((d) => {
