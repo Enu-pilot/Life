@@ -1,6 +1,6 @@
 # LifePlan 要件定義書
 
-- 文書状態: Phase 0 ドラフト（承認待ち）
+- 文書状態: 承認済み（2026-10-26）。実装に合わせて随時更新
 - 最終更新: 2026-10-26
 - 関連文書: [calculation-spec.md](./calculation-spec.md) / [architecture.md](./architecture.md) / [ui-design.md](./ui-design.md) / [test-strategy.md](./test-strategy.md) / [implementation-roadmap.md](./implementation-roadmap.md) / [open-questions.md](./open-questions.md)
 

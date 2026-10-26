@@ -1,6 +1,6 @@
 # LifePlan アーキテクチャ設計書
 
-- 文書状態: Phase 0 ドラフト（承認待ち）
+- 文書状態: 承認済み（2026-10-26）。実装に合わせて随時更新
 - 最終更新: 2026-10-26
 
 ---
@@ -206,3 +206,34 @@ type LifeEvent = {
 | モンテカルロ | `simulate` に利回り系列を外部注入できる引数を追加し、複数回実行して分位点を集計 |
 | 差分方式シナリオ | `Scenario` に `baseScenarioId` + `overrides` を追加し、計算前に解決（マイグレーションで現行形式から移行） |
 | クラウド同期 | 永続化層のアダプター差し替え |
+
+## 9. 実装時に確定・変更した事項（Phase 1, 2026-10-26）
+
+| 項目 | Phase 0 の案 | 実装 | 理由 |
+|---|---|---|---|
+| ビルド・テスト基盤 | Vite / Vitest | Vite 8 / Vitest 5 | Vitest 3 系の依存（tinypool）に重大な脆弱性勧告があったため最新系に統一。`npm audit` 0 件 |
+| TypeScript | 7 系は要確認 | 5.9 系 | 周辺ツールの対応実績を優先（§3.2 の方針どおり） |
+| Lint | ESLint + Prettier（import 制約） | 型検査（`tsc` strict）＋ 層分離テスト（`tests/unit/architecture.test.ts`） | 層分離の強制だけが目的のため、依存を増やさずテストで同等の検査を行う。外部通信 API の不使用も同テストで検査 |
+| フォーム | React Hook Form + Zod | 自前の制御フォーム + Zod | フォーム数が限られ、検証はスキーマと項目間検証の関数で足りるため依存を追加しない |
+| スタイル | CSS Modules | 単一のグローバル CSS（`src/ui/styles.css`） | 画面数が少なく、クラス名の衝突リスクが小さいため |
+| ルーティング | React Router（Hash） | react-router 7 の `HashRouter` | 案どおり |
+| 保存 | IndexedDB + idb-keyval | 案どおり。`Repository` は KV インターフェースを受け取り、テストで書き込み失敗を注入できる | 保存失敗時の挙動をテストするため |
+| E2E | Playwright | `@playwright/test` 1.63.0（環境に導入済みのブラウザと同じ版に固定） | |
+
+### 依存パッケージと必要性
+
+| パッケージ | 区分 | 必要性 |
+|---|---|---|
+| react / react-dom | 本体 | UI |
+| react-router | 本体 | 画面遷移（Hash ルーティング） |
+| zustand | 本体 | アプリ状態（保存処理からも参照するため React 外から扱えるストア） |
+| zod | 本体 | 保存データ・インポートの検証と型の一元化 |
+| idb-keyval | 本体 | IndexedDB の最小ラッパー |
+| recharts | 本体 | グラフ（Phase 4） |
+| vite / @vitejs/plugin-react / typescript | 開発 | ビルド・型検査 |
+| vitest / @vitest/coverage-v8 | 開発 | 単体テスト・カバレッジ |
+| jsdom / @testing-library/* | 開発 | 画面のテスト |
+| fake-indexeddb | 開発 | Node 上で IndexedDB を使うテスト |
+| fast-check | 開発 | プロパティテスト（不変条件） |
+| @playwright/test | 開発 | E2E |
+| @types/* | 開発 | 型定義 |
