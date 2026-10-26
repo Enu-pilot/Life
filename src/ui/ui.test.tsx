@@ -101,3 +101,62 @@ describe('画面の基本操作', () => {
     expect(screen.getAllByText(/110|以下/).length).toBeGreaterThan(0);
   });
 });
+
+describe('人生イベントの画面', () => {
+  async function withSelf() {
+    window.location.hash = '#/events';
+    const ctx = await boot();
+    ctx.store.getState().updateActiveScenario((s) => ({
+      ...s,
+      assumptions: { ...s.assumptions, startYm: '2027-01', endAge: 60 },
+      members: [{ id: 'me', role: 'self', name: '本人', birthYm: '1990-01' }],
+      accounts: s.accounts.map((a) => ({ ...a, openingBalance: 10000000 })),
+    }));
+    return ctx;
+  }
+
+  it('一時支出を追加 → タイムラインに表示 → 差分プレビュー → 無効化・削除が結果に反映される', async () => {
+    const { store } = await withSelf();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'イベントを追加' }));
+    await user.click(screen.getByRole('button', { name: /一時的な収支/ }));
+    const dialog = screen.getByRole('dialog');
+    // 金額未入力では保存できない
+    await user.click(within(dialog).getByRole('button', { name: '保存' }));
+    expect(within(dialog).getAllByText('数値を入力してください').length).toBeGreaterThan(0);
+    await user.clear(within(dialog).getByLabelText(/^名称/));
+    await user.type(within(dialog).getByLabelText(/^名称/), '海外旅行');
+    await user.type(within(dialog).getByRole('textbox', { name: /^金額/ }), '50万');
+    // 差分プレビュー: 生涯の支出が 50 万円増える
+    const preview = await within(dialog).findByRole('region', { name: 'この変更による差分' });
+    expect(within(preview).getByText('生涯の支出').closest('tr')).toHaveTextContent('＋50.0万円');
+    await user.click(within(dialog).getByRole('button', { name: '保存' }));
+    expect(await screen.findByText('海外旅行')).toBeInTheDocument();
+    const ev = store.getState().data!.scenarios[0]!.events[0]!;
+    expect(ev.type === 'one_time' && ev.params.amount).toBe(500000);
+
+    await user.click(screen.getByRole('button', { name: '海外旅行を無効にする' }));
+    expect(store.getState().data!.scenarios[0]!.events[0]!.enabled).toBe(false);
+    await user.click(screen.getByRole('button', { name: '海外旅行を有効にする' }));
+    expect(store.getState().data!.scenarios[0]!.events[0]!.enabled).toBe(true);
+
+    const confirm = window.confirm;
+    window.confirm = () => true;
+    await user.click(screen.getByRole('button', { name: '削除' }));
+    window.confirm = confirm;
+    expect(store.getState().data!.scenarios[0]!.events).toHaveLength(0);
+  });
+
+  it('住宅購入: 頭金が物件価格を超えるとエラー', async () => {
+    await withSelf();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'イベントを追加' }));
+    await user.click(screen.getByRole('button', { name: /住宅購入/ }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^物件価格/), '3000万');
+    await user.clear(within(dialog).getByLabelText(/^頭金/));
+    await user.type(within(dialog).getByLabelText(/^頭金/), '4000万');
+    await user.click(within(dialog).getByRole('button', { name: '保存' }));
+    expect(within(dialog).getAllByText('頭金は物件価格以下にしてください').length).toBeGreaterThan(0);
+  });
+});

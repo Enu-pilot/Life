@@ -1,6 +1,6 @@
 // ランダムシナリオ生成器と不変条件の検査（プロパティテスト・クロスチェック用）
 import fc from 'fast-check';
-import type { Account, FlowItem, Scenario, TransferRule } from '../../src/domain/schema';
+import type { Account, FlowItem, LifeEvent, Scenario, TransferRule } from '../../src/domain/schema';
 import { formatYm } from '../../src/domain/time';
 import { EXTERNAL, type SimulationResult } from '../../src/engine';
 
@@ -34,6 +34,73 @@ const flowArb = (i: number) =>
     }),
   );
 
+const loanTermsArb = fc.record({
+  annualRate: fc.constantFrom(0, 0.005, 0.012, 0.029),
+  termMonths: fc.integer({ min: 1, max: 420 }),
+  method: fc.constantFrom('equal_payment' as const, 'equal_principal' as const),
+  rateChanges: fc.boolean().map((b) => (b ? [{ afterMonths: 36, annualRate: 0.02 }] : [])),
+});
+
+/** ランダムな人生イベント（終了指定は直前のイベント・収支を対象にする） */
+const eventArb = (i: number, nFlow: number) =>
+  fc
+    .record({
+      type: fc.constantFrom('one_time', 'rent', 'home_purchase', 'car', 'pension', 'retirement', 'flow_change'),
+      ym: ymArb(2026, 2055),
+      age: fc.integer({ min: 40, max: 75 }),
+      amount: fc.integer({ min: 0, max: 3_000_000 }),
+      price: fc.integer({ min: 0, max: 60_000_000 }),
+      downRatio: fc.double({ min: 0, max: 1, noNaN: true }),
+      loan: loanTermsArb,
+      useLoan: fc.boolean(),
+      growth: growthArb,
+      rate: rateArb,
+      cycle: fc.integer({ min: 0, max: 10 }),
+      count: fc.integer({ min: 1, max: 4 }),
+      hold: fc.option(ymArb(2030, 2070), { nil: null }),
+      enabled: fc.boolean(),
+      ends: fc.boolean(),
+    })
+    .map((p): LifeEvent => {
+      const common = {
+        id: `e${i}`,
+        name: `e${i}`,
+        enabled: p.enabled || i % 2 === 0,
+        trigger: p.type === 'pension' || p.type === 'retirement' ? { type: 'age' as const, memberId: 'self', age: p.age } : { type: 'date' as const, ym: p.ym },
+        endsIds: p.ends ? (i > 0 ? [`e${i - 1}`] : nFlow > 0 ? ['f0'] : []) : [],
+      };
+      const g = p.growth.type === 'fixed' ? { type: 'none' as const } : p.growth;
+      const down = Math.floor(p.price * p.downRatio);
+      switch (p.type) {
+        case 'one_time':
+          return { ...common, type: 'one_time', params: { direction: p.amount % 2 ? 'income' : 'expense', amount: p.amount, category: 'leisure', growth: g } };
+        case 'rent':
+          return { ...common, type: 'rent', params: { monthlyRent: Math.floor(p.amount / 10), renewalFee: Math.floor(p.amount / 10), renewalIntervalYears: p.cycle % 3, initialCost: p.amount, growth: p.growth, end: p.hold ? { type: 'date', ym: p.hold } : null } };
+        case 'home_purchase':
+          return {
+            ...common,
+            type: 'home_purchase',
+            params: { price: p.price, downPayment: down, closingCosts: Math.floor(p.price / 20), loan: p.loan, propertyTaxYearly: Math.floor(p.price / 300), maintenanceMonthly: Math.floor(p.amount / 100), maintenanceGrowth: p.growth, revaluationRate: p.rate },
+          };
+        case 'car':
+          return {
+            ...common,
+            type: 'car',
+            params: { price: Math.floor(p.price / 10), priceGrowth: g, downPayment: Math.floor(down / 10), loan: p.useLoan ? p.loan : null, cycleYears: p.cycle, purchaseCount: p.count, maintenanceYearly: p.amount / 5 > 0 ? Math.floor(p.amount / 5) : 0, maintenanceGrowth: p.growth, depreciationRate: -Math.abs(p.rate), holdUntil: p.hold ? { type: 'date', ym: p.hold } : null },
+          };
+        case 'pension':
+          return { ...common, type: 'pension', params: { memberId: 'self', annualAmount: p.amount, slideRate: Math.abs(p.rate) / 10 } };
+        case 'retirement':
+          return { ...common, type: 'retirement', params: { severance: p.price, flows: [] } };
+        default:
+          return {
+            ...common,
+            type: 'flow_change',
+            params: { flows: [{ key: 'x', direction: 'expense', name: 'x', category: 'living', amount: Math.floor(p.amount / 10), frequency: 'monthly', end: p.hold ? { type: 'date', ym: p.hold } : null, growth: p.growth, growthBase: 'itemStart', growthStepMonth: 4 }] },
+          };
+      }
+    });
+
 const accountArb = (i: number) =>
   fc
     .record({
@@ -65,6 +132,7 @@ export const scenarioArb: fc.Arbitrary<Scenario> = fc
     nAcc: fc.integer({ min: 0, max: 4 }),
     nFlow: fc.integer({ min: 0, max: 6 }),
     nXfer: fc.integer({ min: 0, max: 3 }),
+    nEvt: fc.integer({ min: 0, max: 4 }),
     seed: fc.integer(),
   })
   .chain((p) =>
@@ -76,8 +144,9 @@ export const scenarioArb: fc.Arbitrary<Scenario> = fc
           minLength: p.nXfer,
           maxLength: p.nXfer,
         }),
+        fc.tuple(...Array.from({ length: p.nEvt }, (_, i) => eventArb(i, p.nFlow))),
       )
-      .map(([accts, flows, xfers]) => {
+      .map(([accts, flows, xfers, events]) => {
         const accounts: Account[] = [{ id: 'cash', kind: 'cash', name: 'cash', openingBalance: p.cash, annualRate: p.cashRate }, ...accts];
         const transferable = accounts.filter((a) => ['cash', 'savings', 'investment', 'other_asset'].includes(a.kind));
         const transfers: TransferRule[] = [];
@@ -112,7 +181,7 @@ export const scenarioArb: fc.Arbitrary<Scenario> = fc
           accounts,
           flows,
           transfers,
-          events: [],
+          events,
         };
       }),
   );

@@ -1,0 +1,391 @@
+{
+ "id": "g",
+ "name": "G-04-home-car-career",
+ "createdAt": "",
+ "updatedAt": "",
+ "flows": [
+  {
+   "id": "sal",
+   "direction": "income",
+   "name": "sal",
+   "category": "salary",
+   "amount": 320000,
+   "frequency": "monthly",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "fixed",
+    "rate": 0.02
+   },
+   "growthBase": "start",
+   "growthStepMonth": 4
+  },
+  {
+   "id": "bonus",
+   "direction": "income",
+   "name": "bonus",
+   "category": "bonus",
+   "amount": 500000,
+   "frequency": "months",
+   "start": null,
+   "end": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60,
+    "endMode": "before"
+   },
+   "growth": {
+    "type": "fixed",
+    "rate": 0.02
+   },
+   "growthBase": "start",
+   "growthStepMonth": 4,
+   "months": [
+    6,
+    12
+   ]
+  },
+  {
+   "id": "living",
+   "direction": "expense",
+   "name": "living",
+   "category": "living",
+   "amount": 180000,
+   "frequency": "monthly",
+   "start": null,
+   "end": null,
+   "growth": {
+    "type": "inflation"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  },
+  {
+   "id": "rentbase",
+   "direction": "expense",
+   "name": "rentbase",
+   "category": "rent",
+   "amount": 95000,
+   "frequency": "monthly",
+   "start": null,
+   "end": null,
+   "growth": {
+    "type": "none"
+   },
+   "growthBase": "start",
+   "growthStepMonth": 1
+  }
+ ],
+ "transfers": [],
+ "events": [
+  {
+   "id": "mar",
+   "type": "marriage",
+   "name": "mar",
+   "enabled": true,
+   "trigger": {
+    "type": "date",
+    "ym": "2029-06"
+   },
+   "endsIds": [],
+   "params": {
+    "spouseName": "配偶者",
+    "spouseBirthYm": "1997-03",
+    "cost": 2000000,
+    "flows": [
+     {
+      "key": "spsal",
+      "direction": "income",
+      "name": "spsal",
+      "category": "salary",
+      "amount": 250000,
+      "frequency": "monthly",
+      "end": {
+       "type": "age",
+       "memberId": "mar:spouse",
+       "age": 60,
+       "endMode": "before"
+      },
+      "growth": {
+       "type": "none"
+      },
+      "growthBase": "start",
+      "growthStepMonth": 1,
+      "ownerId": "mar:spouse"
+     },
+     {
+      "key": "liv",
+      "direction": "expense",
+      "name": "liv",
+      "category": "living",
+      "amount": 80000,
+      "frequency": "monthly",
+      "end": null,
+      "growth": {
+       "type": "inflation"
+      },
+      "growthBase": "start",
+      "growthStepMonth": 1
+     }
+    ]
+   }
+  },
+  {
+   "id": "home",
+   "type": "home_purchase",
+   "name": "home",
+   "enabled": true,
+   "trigger": {
+    "type": "date",
+    "ym": "2031-04"
+   },
+   "endsIds": [
+    "rentbase"
+   ],
+   "params": {
+    "price": 45000000,
+    "downPayment": 5000000,
+    "closingCosts": 3000000,
+    "loan": {
+     "annualRate": 0.008,
+     "termMonths": 420,
+     "method": "equal_payment",
+     "rateChanges": [
+      {
+       "afterMonths": 120,
+       "annualRate": 0.015
+      },
+      {
+       "afterMonths": 240,
+       "annualRate": 0.02
+      }
+     ]
+    },
+    "propertyTaxYearly": 150000,
+    "maintenanceMonthly": 30000,
+    "maintenanceGrowth": {
+     "type": "inflation"
+    },
+    "revaluationRate": -0.01
+   }
+  },
+  {
+   "id": "car",
+   "type": "car",
+   "name": "car",
+   "enabled": true,
+   "trigger": {
+    "type": "date",
+    "ym": "2030-09"
+   },
+   "endsIds": [],
+   "params": {
+    "price": 3000000,
+    "priceGrowth": {
+     "type": "inflation"
+    },
+    "downPayment": 500000,
+    "loan": {
+     "annualRate": 0.029,
+     "termMonths": 60,
+     "method": "equal_payment",
+     "rateChanges": []
+    },
+    "cycleYears": 8,
+    "purchaseCount": 3,
+    "maintenanceYearly": 420000,
+    "maintenanceGrowth": {
+     "type": "inflation"
+    },
+    "depreciationRate": -0.15,
+    "holdUntil": {
+     "type": "age",
+     "memberId": "me",
+     "age": 75
+    }
+   }
+  },
+  {
+   "id": "job",
+   "type": "job",
+   "name": "job",
+   "enabled": true,
+   "trigger": {
+    "type": "date",
+    "ym": "2035-04"
+   },
+   "endsIds": [
+    "sal"
+   ],
+   "params": {
+    "subtype": "change",
+    "cost": 300000,
+    "flows": [
+     {
+      "key": "newsal",
+      "direction": "income",
+      "name": "newsal",
+      "category": "salary",
+      "amount": 420000,
+      "frequency": "monthly",
+      "end": {
+       "type": "age",
+       "memberId": "me",
+       "age": 60,
+       "endMode": "before"
+      },
+      "growth": {
+       "type": "fixed",
+       "rate": 0.01
+      },
+      "growthBase": "itemStart",
+      "growthStepMonth": 4
+     }
+    ]
+   }
+  },
+  {
+   "id": "ret",
+   "type": "retirement",
+   "name": "ret",
+   "enabled": true,
+   "trigger": {
+    "type": "age",
+    "memberId": "me",
+    "age": 60
+   },
+   "endsIds": [],
+   "params": {
+    "severance": 15000000,
+    "flows": [
+     {
+      "key": "rehire",
+      "direction": "income",
+      "name": "rehire",
+      "category": "salary",
+      "amount": 230000,
+      "frequency": "monthly",
+      "end": {
+       "type": "age",
+       "memberId": "me",
+       "age": 65,
+       "endMode": "before"
+      },
+      "growth": {
+       "type": "none"
+      },
+      "growthBase": "start",
+      "growthStepMonth": 1
+     }
+    ]
+   }
+  },
+  {
+   "id": "pen",
+   "type": "pension",
+   "name": "pen",
+   "enabled": true,
+   "trigger": {
+    "type": "age",
+    "memberId": "me",
+    "age": 65
+   },
+   "endsIds": [],
+   "params": {
+    "memberId": "me",
+    "annualAmount": 2000000,
+    "slideRate": 0.003
+   }
+  },
+  {
+   "id": "pen2",
+   "type": "pension",
+   "name": "pen2",
+   "enabled": true,
+   "trigger": {
+    "type": "age",
+    "memberId": "mar:spouse",
+    "age": 65
+   },
+   "endsIds": [],
+   "params": {
+    "memberId": "mar:spouse",
+    "annualAmount": 1000000,
+    "slideRate": 0
+   }
+  },
+  {
+   "id": "old",
+   "type": "flow_change",
+   "name": "old",
+   "enabled": true,
+   "trigger": {
+    "type": "age",
+    "memberId": "me",
+    "age": 75
+   },
+   "endsIds": [],
+   "params": {
+    "flows": [
+     {
+      "key": "care",
+      "direction": "expense",
+      "name": "care",
+      "category": "medical",
+      "amount": 50000,
+      "frequency": "monthly",
+      "end": null,
+      "growth": {
+       "type": "inflation"
+      },
+      "growthBase": "start",
+      "growthStepMonth": 1
+     }
+    ]
+   }
+  }
+ ],
+ "assumptions": {
+  "startYm": "2027-01",
+  "endAge": 90,
+  "inflationRate": 0.015,
+  "defaultReturnRate": 0.03,
+  "autoLiquidate": true
+ },
+ "members": [
+  {
+   "id": "me",
+   "role": "self",
+   "name": "本人",
+   "birthYm": "1995-11"
+  }
+ ],
+ "accounts": [
+  {
+   "id": "cash",
+   "kind": "cash",
+   "name": "生活口座",
+   "openingBalance": 6000000,
+   "annualRate": 0.0002
+  },
+  {
+   "id": "sav",
+   "kind": "savings",
+   "name": "定期",
+   "openingBalance": 2000000,
+   "annualRate": 0.003
+  },
+  {
+   "id": "inv",
+   "kind": "investment",
+   "name": "投資",
+   "openingBalance": 3000000,
+   "annualRate": 0.04
+  }
+ ]
+}

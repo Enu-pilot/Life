@@ -3,6 +3,7 @@
 import { monthlyRate, roundYen } from '../domain/money';
 import type { AccountKind, Scenario } from '../domain/schema';
 import { calendarMonthOf, type MonthIndex } from '../domain/time';
+import { amountAt } from './growth';
 import { aggregate } from './aggregate';
 import { compile } from './compile';
 import { Ledger } from './ledger';
@@ -14,26 +15,12 @@ import './events';
 const FINANCIAL: AccountKind[] = ['cash', 'savings', 'investment'];
 const REAL: AccountKind[] = ['property', 'vehicle', 'other_asset'];
 
-/** 上昇の適用回数: base より後、m 以前に stepMonth を迎えた回数（calculation-spec §8.2） */
-export function growthSteps(base: MonthIndex, m: MonthIndex, stepMonth: number): number {
-  if (m <= base) return 0;
-  const offset = (stepMonth - calendarMonthOf(base) + 12) % 12;
-  const first = base + (offset === 0 ? 12 : offset);
-  if (m < first) return 0;
-  return Math.floor((m - first) / 12) + 1;
-}
-
-export function amountAt(r: Pick<FlowRule, 'amount' | 'growth' | 'growthBase' | 'growthStepMonth'>, m: MonthIndex, inflation: number): number {
-  const g = r.growth;
-  if (g.type === 'none') return r.amount;
-  const rate = g.type === 'inflation' ? inflation : g.rate;
-  return r.amount * Math.pow(1 + rate, growthSteps(r.growthBase, m, r.growthStepMonth));
-}
-
 function occurs(r: Pick<FlowRule, 'from' | 'to' | 'months'>, m: MonthIndex): boolean {
   if (m < r.from || m > r.to) return false;
   return r.months === null || r.months.includes(calendarMonthOf(m));
 }
+
+export { amountAt, growthSteps } from './growth';
 
 export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; monthly: MonthlyRow[] } {
   const { ctx } = plan;
@@ -44,7 +31,7 @@ export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; mo
   const returnShift = opts.returnShift ?? 0;
   const loans = plan.loans.map((l) => new LoanState(l));
   const oneTimesByMonth = new Map<MonthIndex, typeof plan.oneTimes>();
-  for (const o of [...plan.oneTimes].sort((a, b) => a.key.localeCompare(b.key))) {
+  for (const o of [...plan.oneTimes].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
     const list = oneTimesByMonth.get(o.month) ?? [];
     list.push(o);
     oneTimesByMonth.set(o.month, list);

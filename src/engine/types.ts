@@ -81,6 +81,8 @@ export type OneTime =
       name: string;
       sourceId: string;
       sourceKind: SourceKind;
+      /** 定期的な一時金（更新料など）。終了指定（endsIds）の対象になる */
+      endable?: boolean;
     }
   | {
       /** 口座残高の全額を移す（車両の売却など） */

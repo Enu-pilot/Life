@@ -8,6 +8,8 @@ import { resolveEnd, resolveStart, UnresolvedMemberError } from './triggers';
 import type { AccountC, Ctx, FlowRule, Issue, LoanRule, OneTime, Plan, ResolvedEvent, SimOptions, TransferRuleC } from './types';
 
 const TRANSFERABLE = new Set(['cash', 'savings', 'investment', 'other_asset']);
+/** ロケールに依存しない文字コード順の比較（決定性のため） */
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null; issues: Issue[] } {
   const issues: Issue[] = [];
@@ -170,7 +172,7 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
   const oneTimes: OneTime[] = [];
   const sorted = [...enabledEvents]
     .filter((e) => eventMonths.has(e.id))
-    .sort((a, b) => eventMonths.get(a.id)! - eventMonths.get(b.id)! || a.type.localeCompare(b.type) || a.id.localeCompare(b.id));
+    .sort((a, b) => eventMonths.get(a.id)! - eventMonths.get(b.id)! || cmp(a.type, b.type) || cmp(a.id, b.id));
   const expandedIds = new Set<string>();
   for (const e of sorted) {
     if (expandedIds.has(e.id)) throw new Error(`イベントが二重に展開されました: ${e.id}`);
@@ -195,6 +197,7 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
     const src = { sourceId: e.id, sourceKind: 'event' as const };
     const api: ExpandApi = {
       ctx,
+      cashId: cashAccounts[0]!.id,
       month,
       resolveStart: (t: Trigger) => resolveStart(t, ctx.births),
       resolveEnd: (t: Trigger) => resolveEnd(t, ctx.births),
@@ -243,11 +246,15 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
   }
   resolvedEvents.sort((a, b) => a.month - b.month);
 
-  // ---- 終了指定（endsIds）: 指定された収支・積立をイベント発生月の前月で止める ----
+  // ---- 終了指定（endsIds）: 指定された収支・積立をイベント発生月の前月で止める。定期的な一時金（更新料など）も止める ----
+  const dropped = new Set<OneTime>();
   for (const e of sorted) {
     const month = eventMonths.get(e.id)!;
     for (const target of e.endsIds) {
       let hit = false;
+      for (const o of oneTimes) {
+        if (o.kind === 'post' && o.endable && o.sourceId === target && o.month >= month) dropped.add(o);
+      }
       for (const f of [...flows, ...transfers]) {
         if (f.sourceId === target) {
           f.to = Math.min(f.to, month - 1);
@@ -259,6 +266,8 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
       }
     }
   }
+
+  const keptOneTimes = oneTimes.filter((o) => !dropped.has(o));
 
   // ---- 警告: 期間・住居費の重複 ----
   for (const f of flows) {
@@ -283,7 +292,7 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
     warn('NO_FLOWS', '収入・支出が登録されていません。結果は初期資産の運用のみを反映した参考値です');
   }
   return {
-    plan: { ctx, accounts, flows, transfers, oneTimes, loans, events: resolvedEvents, autoLiquidate: s.assumptions.autoLiquidate },
+    plan: { ctx, accounts, flows, transfers, oneTimes: keptOneTimes, loans, events: resolvedEvents, autoLiquidate: s.assumptions.autoLiquidate },
     issues,
   };
 }

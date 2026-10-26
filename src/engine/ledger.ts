@@ -26,7 +26,8 @@ export class Ledger {
   /** 資産は残高、負債は正の残高 */
   balance(id: string): number {
     const v = this.signed.get(id) ?? 0;
-    return this.kinds.get(id) === 'loan' ? -v : v;
+    const b = this.kinds.get(id) === 'loan' ? -v : v;
+    return b === 0 ? 0 : b; // -0 を 0 にそろえる
   }
 
   signedBalance(id: string): number {

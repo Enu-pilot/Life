@@ -112,9 +112,13 @@ def steps(base: int, m: int, step_month: int) -> int:
     return n
 
 
+def _d(x) -> D:
+    return x if isinstance(x, D) else D(str(x))
+
+
 def amount_at(rule, m, inflation) -> D:
     g = rule["growth"]
-    amt = D(str(rule["amount"]))
+    amt = _d(rule["amount"])
     if g["type"] == "none":
         return amt
     rate = D(str(inflation)) if g["type"] == "inflation" else D(str(g["rate"]))
@@ -176,6 +180,7 @@ class Sim:
 
 def compile_base(sim: Sim):
     sc = sim.sc
+    sim.event_month = getattr(sim, "event_month", {})
     for f in sc["flows"]:
         try:
             frm, to = sim.resolve_period(f.get("start"), f.get("end"))
@@ -232,12 +237,180 @@ class Loan:
         return interest, principal
 
 
+# ---------- 人生イベント（§17） ----------
+
+EDU = {
+    "kindergarten:public": 184646, "kindergarten:private": 347338,
+    "elementary:public": 366599, "elementary:private": 1741516,
+    "junior:public": 542450, "junior:private": 1560359,
+    "high:public": 596954, "high:private": 1179261,
+    "university:national": 1035000, "university:private_arts": 1520000, "university:private_science": 1832000,
+}
+ENTRANCE = {"national": 672000, "private_arts": 818000, "private_science": 888000}
+
+
 def prepare_events(sim):
-    pass
+    """有効なイベントの発生月を解決し、結婚・出産で追加されるメンバーの生年月を登録する"""
+    sim.event_month = {}
+    pending = [e for e in sim.sc["events"] if e["enabled"]]
+    for _ in range(len(pending) + 1):
+        rest = []
+        for e in pending:
+            try:
+                m = t_start(e["trigger"], sim.births)
+            except Unresolved:
+                rest.append(e)
+                continue
+            sim.event_month[e["id"]] = m
+            if e["type"] == "marriage":
+                sim.births[e["id"] + ":spouse"] = ym(e["params"]["spouseBirthYm"])
+            if e["type"] == "birth":
+                sim.births[e["id"] + ":child"] = m
+        if len(rest) == len(pending):
+            break
+        pending = rest
+
+
+def _price_at(sim, amount, growth, m):
+    return round_yen(amount_at({"amount": amount, "growth": growth, "base": sim.start, "step": 1}, m, sim.inflation))
+
+
+def _post(sim, eid, key, m, typ, frm, to, amount):
+    sim.onetimes.append((m, f"{eid}:{key}", "post", {"type": typ, "from": frm, "to": to, "amount": amount}))
+
+
+def _cash_once(sim, eid, key, direction, amount, m, endable=False):
+    if amount <= 0:
+        return
+    if direction == "income":
+        _post(sim, eid, key, m, "income", EXTERNAL, sim.cash, amount)
+    else:
+        _post(sim, eid, key, m, "expense", sim.cash, EXTERNAL, amount)
+    if endable:
+        sim.endable.append((sim.onetimes[-1], eid))
+
+
+def _template(sim, eid, t, month):
+    to = t_end(t["end"], sim.births) if t.get("end") else sim.end
+    r = sim.flow_rule(t, month, to, eid)
+    sim.flows.append(r)
+
+
+def _flow(sim, eid, direction, frm, to, amount, months, growth, step):
+    sim.flows.append({"dir": direction, "cat": "", "from": frm, "to": to, "amount": amount, "months": months,
+                      "growth": growth, "base": sim.start, "step": step, "src": eid})
+
+
+def _loan(sim, aid, amount, to_acct, draw_m, terms, eid, key):
+    if amount <= 0:
+        return
+    sim.add_account(aid, "loan", 0, terms["annualRate"])
+    _post(sim, eid, key, draw_m, "loan_draw", aid, to_acct, amount)
+    first = draw_m + 1
+    changes = sorted((first + c["afterMonths"], c["annualRate"]) for c in terms["rateChanges"])
+    sim.loans.append(Loan(aid, first, terms["termMonths"], terms["method"], terms["annualRate"], changes))
 
 
 def expand_events(sim):
-    pass
+    sim.endable = []
+    evs = [e for e in sim.sc["events"] if e["enabled"] and e["id"] in sim.event_month]
+    evs.sort(key=lambda e: (sim.event_month[e["id"]], e["type"], e["id"]))
+    for e in evs:
+        m = sim.event_month[e["id"]]
+        if m > sim.end:
+            continue
+        eid, p, t = e["id"], e["params"], e["type"]
+        try:
+            if t == "one_time":
+                _cash_once(sim, eid, "main", p["direction"], _price_at(sim, p["amount"], p["growth"], m), m)
+            elif t in ("flow_change", "job", "retirement", "marriage", "birth"):
+                if t == "job":
+                    _cash_once(sim, eid, "cost", "expense", p["cost"], m)
+                if t == "retirement":
+                    _cash_once(sim, eid, "severance", "income", p["severance"], m)
+                if t in ("marriage", "birth"):
+                    _cash_once(sim, eid, "cost", "expense", p["cost"], m)
+                for f in p["flows"]:
+                    _template(sim, eid, f, m)
+            elif t == "education":
+                b = _birth(sim.births, p["memberId"])
+                for stage in ("kindergarten", "elementary", "junior", "high", "university"):
+                    course = p[stage]
+                    if course == "none":
+                        continue
+                    key = f"{stage}:{course}"
+                    annual = p["overrides"].get(key, EDU.get(key))
+                    entry = stage_entry(b, stage)
+                    _flow(sim, eid, "expense", entry, entry + STAGE_YEARS[stage] * 12 - 1, D(annual) / D(12), None, p["growth"], 1)
+                    if stage == "university":
+                        ent = p["overrides"].get(f"university_entrance:{course}", ENTRANCE[course])
+                        _cash_once(sim, eid, "entrance", "expense", _price_at(sim, ent, p["growth"], entry), entry)
+            elif t == "rent":
+                to = t_end(p["end"], sim.births) if p.get("end") else sim.end
+                _flow(sim, eid, "expense", m, to, p["monthlyRent"], None, p["growth"], 1)
+                _cash_once(sim, eid, "initial", "expense", p["initialCost"], m)
+                if p["renewalFee"] > 0 and p["renewalIntervalYears"] > 0:
+                    k, rm = 1, m + 12 * p["renewalIntervalYears"]
+                    while rm <= to:
+                        fee = round_yen(amount_at({"amount": p["renewalFee"], "growth": p["growth"], "base": sim.start, "step": 1}, rm, sim.inflation))
+                        _cash_once(sim, eid, f"renewal{k:02d}", "expense", fee, rm, endable=True)
+                        k, rm = k + 1, rm + 12 * p["renewalIntervalYears"]
+            elif t == "home_purchase":
+                if p["downPayment"] > p["price"]:
+                    continue
+                prop = eid + ":property"
+                sim.add_account(prop, "property", 0, p["revaluationRate"])
+                if p["downPayment"] > 0:
+                    _post(sim, eid, "a-down", m, "asset_purchase", sim.cash, prop, p["downPayment"])
+                _loan(sim, eid + ":loan", p["price"] - p["downPayment"], prop, m, p["loan"], eid, "b-draw")
+                _cash_once(sim, eid, "c-costs", "expense", p["closingCosts"], m)
+                if p["maintenanceMonthly"] > 0:
+                    _flow(sim, eid, "expense", m, sim.end, p["maintenanceMonthly"], None, p["maintenanceGrowth"], 1)
+                if p["propertyTaxYearly"] > 0:
+                    _flow(sim, eid, "expense", (year_of(m) + 1) * 12 + 3, sim.end, p["propertyTaxYearly"], [4], {"type": "none"}, 1)
+            elif t == "car":
+                veh = eid + ":vehicle"
+                sale = t_start(p["holdUntil"], sim.births) if p.get("holdUntil") else None
+                last = min(sale - 1, sim.end) if sale is not None else sim.end
+                sim.add_account(veh, "vehicle", 0, p["depreciationRate"])
+                count = p["purchaseCount"] if p["cycleYears"] > 0 else 1
+                for k in range(count):
+                    pm = m + k * p["cycleYears"] * 12
+                    if pm > last:
+                        break
+                    tag = f"k{k:02d}"
+                    price = _price_at(sim, p["price"], p["priceGrowth"], pm)
+                    if k > 0:
+                        sim.onetimes.append((pm, f"{eid}:{tag}-1sell", "sellAll", {"account": veh, "to": sim.cash}))
+                    if p["loan"]:
+                        down = min(p["downPayment"], price)
+                        if down > 0:
+                            _post(sim, eid, f"{tag}-2down", pm, "asset_purchase", sim.cash, veh, down)
+                        _loan(sim, f"{eid}:loan{k}", price - down, veh, pm, p["loan"], eid, f"{tag}-3draw")
+                    elif price > 0:
+                        _post(sim, eid, f"{tag}-2buy", pm, "asset_purchase", sim.cash, veh, price)
+                if p["maintenanceYearly"] > 0:
+                    _flow(sim, eid, "expense", m, last, D(p["maintenanceYearly"]) / D(12), None, p["maintenanceGrowth"], 1)
+                if sale is not None and sale <= sim.end:
+                    sim.onetimes.append((sale, f"{eid}:z-final-sell", "sellAll", {"account": veh, "to": sim.cash}))
+            elif t == "pension":
+                if p["memberId"] not in sim.births:
+                    continue
+                g = {"type": "none"} if p["slideRate"] == 0 else {"type": "fixed", "rate": p["slideRate"]}
+                _flow(sim, eid, "income", m, sim.end, D(p["annualAmount"]) / D(12), None, g, 4)
+        except Unresolved:
+            continue
+    # 終了指定: 発生月の前月で止める
+    for e in evs:
+        m = sim.event_month[e["id"]]
+        for target in e["endsIds"]:
+            for f in sim.flows + sim.transfers:
+                if f["src"] == target:
+                    f["to"] = min(f["to"], m - 1)
+            # 定期的な一時金（更新料）も発生月以降は計上しない
+            for (o, src) in list(sim.endable):
+                if src == target and o[0] >= m and o in sim.onetimes:
+                    sim.onetimes.remove(o)
 
 
 def occurs(r, m):

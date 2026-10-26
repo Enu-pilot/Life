@@ -7,6 +7,8 @@ import type { AccountC, Ctx, FlowRule, LoanRule, OneTime } from '../types';
 
 export type ExpandApi = {
   ctx: Ctx;
+  /** 生活口座の ID */
+  cashId: string;
   /** イベント発生月 */
   month: MonthIndex;
   resolveStart(t: Trigger): MonthIndex;

@@ -200,14 +200,18 @@ export function FinancesPage({ initialTab = 'income' }: { initialTab?: Tab }) {
   const memberName = (id?: string) => members.find((m) => m.id === id)?.label ?? '世帯';
 
   const removeWithCheck = (id: string, name: string, apply: (s: Scenario) => Scenario) => {
-    const refs = findReferences(scenario, id);
+    // イベントの「終了指定」からの参照は削除時に一緒に外す。それ以外の参照があれば削除しない
+    const refs = findReferences({ ...scenario, events: scenario.events.map((x) => ({ ...x, endsIds: [] })) }, id);
     if (refs.length > 0) {
       setBlocked(`「${name}」は ${refs.join('、')} で参照されているため削除できません。`);
       return;
     }
     if (!window.confirm(`「${name}」を削除しますか？`)) return;
     setBlocked(null);
-    store.getState().updateActiveScenario(apply);
+    store.getState().updateActiveScenario((s) => {
+      const next = apply(s);
+      return { ...next, events: next.events.map((x) => (x.endsIds.includes(id) ? { ...x, endsIds: x.endsIds.filter((y) => y !== id) } : x)) };
+    });
   };
 
   const flowsOf = (dir: 'income' | 'expense') => scenario.flows.filter((f) => f.direction === dir);
