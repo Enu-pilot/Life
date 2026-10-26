@@ -13,7 +13,7 @@
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --exclude tests/unit/performance.test.ts",
     "test:e2e": "playwright test",
     "verify:golden": "python3 -I tools/verify/generate_golden.py"
   },

@@ -3,7 +3,7 @@
 import { monthlyRate, roundYen } from '../domain/money';
 import type { AccountKind, Scenario } from '../domain/schema';
 import { calendarMonthOf, type MonthIndex } from '../domain/time';
-import { amountAt } from './growth';
+import { amountAt, growthSteps } from './growth';
 import { aggregate } from './aggregate';
 import { compile } from './compile';
 import { Ledger } from './ledger';
@@ -37,12 +37,51 @@ export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; mo
     oneTimesByMonth.set(o.month, list);
   }
   const monthly: MonthlyRow[] = [];
+  // 月次の残高オブジェクトは同じキー順で作る（V8 の最適化が効きやすい）
+  const balanceTemplate: Record<string, number> = Object.fromEntries(plan.accounts.map((a) => [a.id, 0]));
+  const keyCache = new Map<string, string>();
+  const cached = (k: string) => {
+    let v = keyCache.get(k);
+    if (v === undefined) keyCache.set(k, (v = k));
+    return v;
+  };
+  const retKey = (id: string) => cached(`ret:${id}`);
+  const revalKey = (id: string) => cached(`reval:${id}`);
+  const loanKeyMap = new Map<string, { i: string; p: string }>();
+  const loanKeys = (id: string) => {
+    let v = loanKeyMap.get(id);
+    if (!v) loanKeyMap.set(id, (v = { i: `loan:${id}:i`, p: `loan:${id}:p` }));
+    return v;
+  };
+  // 事前の振り分け（性能対策）
+  const incomeFlows = plan.flows.filter((f) => f.direction === 'income');
+  const expenseFlows = plan.flows.filter((f) => f.direction === 'expense');
+  const returnAccounts = plan.accounts
+    .filter((a) => a.kind === 'cash' || a.kind === 'savings' || a.kind === 'investment')
+    .map((a) => ({ a, mr: monthlyRate(a.annualRate - (a.feeRate ?? 0) + (a.kind === 'investment' ? returnShift : 0)) }))
+    .filter((x) => x.mr !== 0);
+  const realAccounts = plan.accounts.filter((a) => REAL.includes(a.kind) && a.annualRate !== 0).map((a) => ({ a, mr: monthlyRate(a.annualRate) }));
+  // 上昇率の係数は適用回数が変わるまで同じ（累乗の計算をキャッシュ）
+  const factorCache = new Map<object, { steps: number; factor: number }>();
+  const amountOf = (r: FlowRule | TransferRuleC, m: MonthIndex): number => {
+    const g = r.growth;
+    if (g.type === 'none') return r.amount;
+    const steps = growthSteps(r.growthBase, m, r.growthStepMonth);
+    let c = factorCache.get(r);
+    if (!c || c.steps !== steps) {
+      c = { steps, factor: amountAt({ ...r, amount: 1 }, m, ctx.inflationRate) };
+      factorCache.set(r, c);
+    }
+    return r.amount * c.factor;
+  };
 
+  // 仕訳キーはルールごとに 1 回だけ作る
+  const flowKeys = new Map(plan.flows.map((f) => [f, `flow:${f.key}`] as const));
   const postFlow = (r: FlowRule, m: MonthIndex) => {
     if (!occurs(r, m)) return;
-    const amount = roundYen(amountAt(r, m, ctx.inflationRate));
+    const amount = roundYen(amountOf(r, m));
     if (amount <= 0) return;
-    ledger.post(`flow:${r.key}`, {
+    ledger.post(flowKeys.get(r)!, {
       month: m,
       from: r.direction === 'income' ? EXTERNAL : cash.id,
       to: r.direction === 'income' ? cash.id : EXTERNAL,
@@ -57,29 +96,44 @@ export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; mo
 
   for (let m = ctx.start; m <= ctx.end; m++) {
     // 2. 運用損益・利息（期首残高に月利を適用）
-    for (const a of plan.accounts) {
-      if (a.kind !== 'cash' && a.kind !== 'savings' && a.kind !== 'investment') continue;
-      const rate = a.annualRate - (a.feeRate ?? 0) + (a.kind === 'investment' ? returnShift : 0);
-      const bal = ledger.balance(a.id);
-      if (rate === 0 || bal <= 0) continue;
-      const r = roundYen(bal * monthlyRate(rate));
-      const type = a.kind === 'investment' ? 'investment_return' : 'interest';
-      const base = { month: m, type, category: type, name: a.name, sourceId: a.id, sourceKind: 'account' } as const;
-      if (r > 0) ledger.post(`ret:${a.id}`, { ...base, from: EXTERNAL, to: a.id, amount: r });
-      else if (r < 0) ledger.post(`ret:${a.id}`, { ...base, from: a.id, to: EXTERNAL, amount: Math.min(-r, bal) });
-    }
-    // 3. 実物資産の評価変動
-    for (const a of plan.accounts) {
-      if (!REAL.includes(a.kind) || a.annualRate === 0) continue;
+    for (const { a, mr } of returnAccounts) {
       const bal = ledger.balance(a.id);
       if (bal <= 0) continue;
-      const r = roundYen(bal * monthlyRate(a.annualRate));
-      const base = { month: m, type: 'revaluation', category: 'revaluation', name: a.name, sourceId: a.sourceId, sourceKind: a.sourceKind } as const;
-      if (r > 0) ledger.post(`reval:${a.id}`, { ...base, from: EXTERNAL, to: a.id, amount: r });
-      else if (r < 0) ledger.post(`reval:${a.id}`, { ...base, from: a.id, to: EXTERNAL, amount: Math.min(-r, bal) });
+      const r = roundYen(bal * mr);
+      if (r === 0) continue;
+      const type = a.kind === 'investment' ? 'investment_return' : 'interest';
+      ledger.post(retKey(a.id), {
+        month: m,
+        type,
+        category: type,
+        name: a.name,
+        sourceId: a.id,
+        sourceKind: 'account',
+        from: r > 0 ? EXTERNAL : a.id,
+        to: r > 0 ? a.id : EXTERNAL,
+        amount: r > 0 ? r : Math.min(-r, bal),
+      });
+    }
+    // 3. 実物資産の評価変動
+    for (const { a, mr } of realAccounts) {
+      const bal = ledger.balance(a.id);
+      if (bal <= 0) continue;
+      const r = roundYen(bal * mr);
+      if (r === 0) continue;
+      ledger.post(revalKey(a.id), {
+        month: m,
+        type: 'revaluation',
+        category: 'revaluation',
+        name: a.name,
+        sourceId: a.sourceId,
+        sourceKind: a.sourceKind,
+        from: r > 0 ? EXTERNAL : a.id,
+        to: r > 0 ? a.id : EXTERNAL,
+        amount: r > 0 ? r : Math.min(-r, bal),
+      });
     }
     // 4. 収入
-    for (const f of plan.flows) if (f.direction === 'income') postFlow(f, m);
+    for (const f of incomeFlows) postFlow(f, m);
     // 5. 一時収支・資産購入・借入・売却
     for (const o of oneTimesByMonth.get(m) ?? []) {
       if (o.kind === 'post') {
@@ -112,19 +166,19 @@ export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; mo
       }
     }
     // 6. 定常支出
-    for (const f of plan.flows) if (f.direction === 'expense') postFlow(f, m);
+    for (const f of expenseFlows) postFlow(f, m);
     // 7. ローン返済（利息は支出、元本は負債の減少）
     for (const l of loans) {
       const pay = l.nextPayment(m, ledger.balance(l.rule.accountId));
       if (!pay) continue;
-      const base = { month: m, name: l.rule.name, sourceId: l.rule.sourceId, sourceKind: l.rule.sourceKind } as const;
-      ledger.post(`loan:${l.rule.accountId}:i`, { ...base, from: cash.id, to: EXTERNAL, amount: pay.interest, type: 'loan_interest', category: 'loan_interest' });
-      ledger.post(`loan:${l.rule.accountId}:p`, { ...base, from: cash.id, to: l.rule.accountId, amount: pay.principal, type: 'loan_principal', category: 'loan_principal' });
+      const { name, sourceId, sourceKind, accountId } = l.rule;
+      ledger.post(loanKeys(accountId).i, { month: m, name, sourceId, sourceKind, from: cash.id, to: EXTERNAL, amount: pay.interest, type: 'loan_interest', category: 'loan_interest' });
+      ledger.post(loanKeys(accountId).p, { month: m, name, sourceId, sourceKind, from: cash.id, to: accountId, amount: pay.principal, type: 'loan_principal', category: 'loan_principal' });
     }
     // 8. 振替（積立・取崩）。生活口座以外からの振替は残高を上限とする
     for (const t of plan.transfers) {
       if (!occurs(t as TransferRuleC & { months: number[] | null }, m)) continue;
-      let amount = roundYen(amountAt(t, m, ctx.inflationRate));
+      let amount = roundYen(amountOf(t, m));
       if (t.fromId !== cash.id) amount = Math.min(amount, Math.max(0, ledger.balance(t.fromId)));
       if (amount <= 0) continue;
       ledger.post(`xfer:${t.key}`, {
@@ -161,13 +215,13 @@ export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; mo
       }
     }
     // 10. 期末残高の記録
-    monthly.push(snapshotRow(m, plan, ledger, cash.id));
+    monthly.push(snapshotRow(m, plan, ledger, cash.id, balanceTemplate));
   }
   return { ledger, monthly };
 }
 
-function snapshotRow(m: MonthIndex, plan: Plan, ledger: Ledger, cashId: string): MonthlyRow {
-  const balances: Record<string, number> = {};
+function snapshotRow(m: MonthIndex, plan: Plan, ledger: Ledger, cashId: string, template: Record<string, number>): MonthlyRow {
+  const balances: Record<string, number> = { ...template };
   let financialAssets = 0;
   let realAssets = 0;
   let liabilities = 0;

@@ -5,7 +5,7 @@ import type { Scenario } from '../../domain/schema';
 import { ageAt, formatYm } from '../../domain/time';
 import { simulate } from '../../engine';
 import { useData, useUnit } from '../AppContext';
-import { CompareChart } from '../charts/Charts';
+import { CompareChart } from '../charts/LazyCharts';
 import { COMPARE_COLORS, compareRows } from '../charts/chartData';
 import { Banner, Disclaimer } from '../components/common';
 import { YearDetail } from '../components/YearDetail';

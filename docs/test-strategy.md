@@ -154,3 +154,20 @@ ui-design.md §6 のフロー 1〜5 を Playwright で自動化。加えて:
 - `tests/fixtures/`: サンプルシナリオ、各スキーマ版の保存データ（マイグレーション用）。
 - `tests/golden/`: ゴールデンケースの入力と期待値。期待値ファイルには算出方法（手計算 / 独立実装のバージョン）を記載。
 - 期待値ファイルの更新は、仕様変更の承認とセットでのみ行う。更新時はコミットメッセージに理由と承認の参照を記載する。
+
+## 11. 実装したテストの対応表（v1.0, 2026-10-26）
+
+| 方針の項目 | テストファイル | 主な内容 |
+|---|---|---|
+| §3 計算エンジンの単体 | `src/engine/simulate.test.ts`, `src/engine/triggers.test.ts`, `src/domain/{time,money}.test.ts` | 必須検証（収支なし／収入>支出／支出>収入／初期資産ゼロ／途中変更／長期間／境界／丸め・浮動小数／決定性）、ローン、上昇率、トリガー、仕訳台帳 |
+| §4 境界値・異常値 | 同上, `src/storage/storage.test.ts` | 範囲外・型違い・NaN・参照切れ・期間逆転・ID 重複 |
+| §5 人生イベント | `src/engine/events/events.test.ts` | 種別ごとの手計算、終了指定、無効化＝削除、編集差分、二重適用なし、組み合わせ |
+| 高度なモデル（§18） | `src/engine/advanced.test.ts` | 年金の繰上げ・繰下げ（適用条件外を含む）、手取り率、手数料、実質値、感度分析 |
+| §6 シナリオ比較 | `src/app/store.test.ts`, `src/ui/ui.test.tsx`, `src/ui/charts/chartData.test.ts`, `tests/e2e/flows.spec.ts` | 複製の独立性、比較指標・差分、グラフと表の一致 |
+| §7 保存・復元 | `src/storage/storage.test.ts`, `src/app/store.test.ts`, `tests/e2e/flows.spec.ts` | 往復、v1 → v2 移行（`tests/fixtures/appdata-v1.json`）、新しすぎる版・壊れたファイルの拒否、書き込み失敗時の書き戻し、読み戻し確認、保存失敗の表示 |
+| §8 UI 主要操作（E2E） | `tests/e2e/{basic,flows}.spec.ts` | ui-design §6 のフロー 1〜5、入力エラー、外部通信なし |
+| §9 長期間の整合性 | `tests/unit/property.test.ts`, `tests/unit/arbitraries.ts` | ランダム 150 シナリオ（イベント含む）で全不変条件 |
+| §9 独立実装との突き合わせ | `tests/unit/golden.test.ts`（G-01〜G-05）, `tests/unit/crosscheck.test.ts`（ランダム 40 シナリオ） | `tools/verify/lifeplan_ref.py`（Python・Decimal 40 桁、仕様書から独立に実装）と完全一致 |
+| 性能 | `tests/unit/performance.test.ts` | 110 年 × イベント 50 件、中央値 < 50ms |
+| 層分離・プライバシー | `tests/unit/architecture.test.ts` | engine/storage/domain の依存方向、外部通信 API の不使用 |
+| CSV | `src/app/csv.test.ts` | エスケープ・数式インジェクション対策・値の一致 |

@@ -5,7 +5,7 @@ import { useActiveScenario, useAppStore, useData, useUnit } from '../AppContext'
 import { Banner, Disclaimer } from '../components/common';
 import { Issues } from '../components/Issues';
 import { useSimulation, type OkResult } from '../useSimulation';
-import { AssetChart } from '../charts/Charts';
+import { AssetChart } from '../charts/LazyCharts';
 
 function GettingStarted() {
   const store = useAppStore();

@@ -49,11 +49,15 @@ export function openingSnapshot(plan: Plan): Snapshot {
 
 export function aggregate(plan: Plan, ledger: Ledger, monthly: MonthlyRow[]): { monthly: MonthlyRow[]; yearly: YearlyRow[]; metrics: Metrics } {
   const start = plan.ctx.start;
-  const byCat: Record<string, number>[] = monthly.map(() => ({}));
+  const firstYear = yearOf(start);
+  // カテゴリ別の集計は年単位で直接行う（月ごとのオブジェクトを作らない）
+  const byCatYear = new Map<number, Record<string, number>>();
   for (const p of ledger.postings) {
     const i = p.month - start;
     const row = monthly[i]!;
-    const cat = byCat[i]!;
+    const yi = yearOf(p.month) - firstYear;
+    let cat = byCatYear.get(yi);
+    if (!cat) byCatYear.set(yi, (cat = {}));
     switch (p.type) {
       case 'income':
         row.income += p.amount;
@@ -100,10 +104,9 @@ export function aggregate(plan: Plan, ledger: Ledger, monthly: MonthlyRow[]): { 
   for (let i = 0; i < monthly.length; ) {
     const year = yearOf(monthly[i]!.month);
     const rows: MonthlyRow[] = [];
-    const cats: Record<string, number> = {};
+    const cats: Record<string, number> = byCatYear.get(year - firstYear) ?? {};
     while (i < monthly.length && yearOf(monthly[i]!.month) === year) {
       rows.push(monthly[i]!);
-      for (const [k, v] of Object.entries(byCat[i]!)) cats[k] = (cats[k] ?? 0) + v;
       i++;
     }
     const last = rows[rows.length - 1]!;

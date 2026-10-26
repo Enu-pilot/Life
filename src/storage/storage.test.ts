@@ -5,11 +5,12 @@ import { appData, flow, scenario } from '../../tests/unit/fixtures';
 import { duplicateScenario } from '../domain/factory';
 import { CURRENT_SCHEMA_VERSION, parseAppData } from '../domain/schema';
 import { simulate } from '../engine';
+import { scenarioProblems } from '../app/importCheck';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildBackupFile, parseBackupFile } from './backupFile';
+import { backupFileName, buildBackupFile, parseBackupFile } from './backupFile';
 import { migrate } from './migrations';
-import { MAX_BACKUPS, Repository } from './repository';
+import { MAX_BACKUPS, Repository, requestPersistence } from './repository';
 
 let dbSeq = 0;
 const freshRepo = () => new Repository(`test-${++dbSeq}`, 'kv');
@@ -294,5 +295,75 @@ describe('バックアップファイル', () => {
     const r = await parseBackupFile(text);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.stage).toBe(stage);
+  });
+});
+
+describe('データ保護（Phase 6）', () => {
+  it('置き換え後の読み戻しが一致しなければ元に戻して失敗する', async () => {
+    const base = freshRepo();
+    await base.save(appData([scenario({ name: 'A' })]));
+    const corrupting = new Repository({
+      get: (k) => base.kv.get(k),
+      del: (k) => base.kv.del(k),
+      // 書き込み時にデータを壊す保存領域を模擬
+      set: async (k, v) => base.kv.set(k, k === 'data' && (v as any)?.scenarios?.[0]?.name === 'B' ? { ...(v as object), scenarios: [] } : v),
+    });
+    await expect(corrupting.replace(appData([scenario({ name: 'B' })]), 'import')).rejects.toThrow('確認に失敗');
+    const r = await base.load();
+    expect(r.status === 'ok' && r.data.scenarios[0]!.name).toBe('A');
+  });
+  it('インポートのプレビューで計算できないシナリオを知らせる（読み込み自体は可能）', async () => {
+    const d = appData([scenario({ name: '本人なし', members: [] })]);
+    const r = await parseBackupFile(await buildBackupFile(d, '1.0.0', new Date()));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(scenarioProblems(r.preview.data)[0]).toContain('本人の生年月');
+  });
+  it('値の範囲外・必須欠落・未知のバージョンを拒否し、拒否理由に項目のパスを含める', async () => {
+    const bad = JSON.parse(await buildBackupFile(appData(), '1.0.0', new Date()));
+    bad.data.scenarios[0].flows = [{ id: 'x', direction: 'income', name: 'x', category: 'salary', amount: -5, frequency: 'monthly', start: null, end: null, growth: { type: 'none' }, growthBase: 'start', growthStepMonth: 1 }];
+    const r = await parseBackupFile(JSON.stringify(bad));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.stage).toBe('schema');
+      expect(r.error.issues!.join('\n')).toContain('scenarios.0.flows.0.amount');
+    }
+    const future = JSON.parse(await buildBackupFile(appData(), '1.0.0', new Date()));
+    future.data.schemaVersion = 99;
+    const r2 = await parseBackupFile(JSON.stringify(future));
+    expect(!r2.ok && r2.error.stage).toBe('version');
+  });
+  it('巨大ファイルは拒否', async () => {
+    const r = await parseBackupFile(' '.repeat(20 * 1024 * 1024 + 1));
+    expect(!r.ok && r.error.stage).toBe('size');
+  });
+});
+
+describe('保存領域の補助機能', () => {
+  it('バックアップのファイル名は日時を含む', () => {
+    expect(backupFileName(new Date(2026, 9, 26, 9, 5))).toBe('lifeplan-backup-20261026-0905.json');
+  });
+  it('clear で保存データを削除する（退避世代は残る）', async () => {
+    const repo = freshRepo();
+    await repo.save(appData());
+    await repo.pushBackup('daily', { x: 1 });
+    await repo.clear();
+    expect((await repo.load()).status).toBe('empty');
+    expect(await repo.listBackups()).toHaveLength(1);
+  });
+  it('永続化の要求: 許可済み・新たに許可・非対応・例外', async () => {
+    const orig = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    const setNav = (v: unknown) => Object.defineProperty(globalThis, 'navigator', { value: v, configurable: true });
+    try {
+      setNav({ storage: { persisted: async () => true, persist: async () => false } });
+      expect(await requestPersistence()).toBe(true);
+      setNav({ storage: { persisted: async () => false, persist: async () => true } });
+      expect(await requestPersistence()).toBe(true);
+      setNav({});
+      expect(await requestPersistence()).toBeNull();
+      setNav({ storage: { persisted: async () => { throw new Error('x'); }, persist: async () => true } });
+      expect(await requestPersistence()).toBeNull();
+    } finally {
+      if (orig) Object.defineProperty(globalThis, 'navigator', orig);
+    }
   });
 });

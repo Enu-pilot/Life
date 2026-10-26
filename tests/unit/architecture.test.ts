@@ -35,6 +35,18 @@ describe('層分離', () => {
     expect(bad).toEqual([]);
   });
 
+  it('src/storage は src/domain 以外の層（engine・ui・app）を import しない', () => {
+    const bad: string[] = [];
+    for (const f of files(join(ROOT, 'storage'))) {
+      for (const i of imports(f)) {
+        if (!i.startsWith('.')) continue;
+        const target = relative(ROOT, resolve(dirname(f), i));
+        if (!target.startsWith('storage') && !target.startsWith('domain')) bad.push(`${relative(ROOT, f)} → ${i}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('src/domain は他の層を import しない', () => {
     const bad: string[] = [];
     for (const f of files(join(ROOT, 'domain'))) {

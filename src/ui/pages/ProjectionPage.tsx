@@ -3,13 +3,15 @@ import { categoryLabel as categoryName } from '../../domain/categories';
 import { formatMoney, formatYmJa } from '../../domain/format';
 import { ageAt, formatYm, yearOf } from '../../domain/time';
 import { useActiveScenario, useUnit } from '../AppContext';
-import { AssetChart, CashflowChart } from '../charts/Charts';
+import { AssetChart, CashflowChart } from '../charts/LazyCharts';
 import { monthlyCashflow, yearlyCashflow } from '../charts/chartData';
 import { Banner, Disclaimer } from '../components/common';
 import { Issues } from '../components/Issues';
 import { YearDetail } from '../components/YearDetail';
 import { YearTable } from '../components/YearTable';
 import { Sensitivity } from '../components/Sensitivity';
+import { buildYearlyCsv } from '../../app/csv';
+import { downloadText } from '../download';
 import { toReal } from '../../engine';
 import { EVENT_META } from '../events/defaults';
 import { useSimulation, type OkResult } from '../useSimulation';
@@ -105,6 +107,18 @@ export function ProjectionPage() {
                 <option value="real">実質値（{formatYmJa(formatYm(result.start))}時点の物価に換算）</option>
               </select>
             </label>
+            <button
+              type="button"
+              className="btn btn--small"
+              onClick={() => {
+                if (!window.confirm('年次表を CSV ファイルとして保存します。ファイルには収入・資産などの個人情報が含まれます。よろしいですか？')) return;
+                const now = new Date();
+                const csv = buildYearlyCsv(scenario, shown.ok ? shown : result, { real, exportedAt: now });
+                downloadText(`lifeplan-${scenario.name.replace(/[\\/:*?"<>|]/g, '_')}-${real ? 'real' : 'nominal'}.csv`, csv, 'text/csv');
+              }}
+            >
+              CSV 出力（年次表）
+            </button>
             {real && <span className="muted small">物価上昇率 {(scenario.assumptions.inflationRate * 100).toFixed(2)}% で割り引いた購買力の目安です（表示のみ。年次の値は各年の最終月の物価で換算）。</span>}
           </div>
           <div className="tabs" role="tablist">

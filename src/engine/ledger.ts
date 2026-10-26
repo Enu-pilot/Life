@@ -13,7 +13,9 @@ export class DuplicatePostingError extends Error {}
  */
 export class Ledger {
   private signed = new Map<string, number>();
+  /** 一意キーの検査は同じ月の中だけで十分（キーに月を含むため）。月が変わったら作り直してメモリを抑える */
   private keys = new Set<string>();
+  private keysMonth: MonthIndex | null = null;
   readonly postings: Posting[] = [];
 
   constructor(readonly kinds: Map<string, AccountKind>) {}
@@ -43,9 +45,13 @@ export class Ledger {
       throw new Error(`仕訳金額は 0 以上の整数でなければなりません: ${p.amount} (${uniqueKey})`);
     }
     if (p.amount === 0) return;
-    const k = `${p.month}|${uniqueKey}`;
-    if (this.keys.has(k)) throw new DuplicatePostingError(`同じ仕訳が二重に作られました: ${k}`);
-    this.keys.add(k);
+    if (this.keysMonth !== null && p.month < this.keysMonth) throw new Error('仕訳は月の昇順で記録してください');
+    if (this.keysMonth !== p.month) {
+      this.keys = new Set();
+      this.keysMonth = p.month;
+    }
+    if (this.keys.has(uniqueKey)) throw new DuplicatePostingError(`同じ仕訳が二重に作られました: ${p.month}|${uniqueKey}`);
+    this.keys.add(uniqueKey);
     if (p.from !== EXTERNAL) this.signed.set(p.from, this.signedBalance(p.from) - p.amount);
     if (p.to !== EXTERNAL) this.signed.set(p.to, this.signedBalance(p.to) + p.amount);
     this.postings.push(p);

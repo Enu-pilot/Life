@@ -4,7 +4,7 @@ import type { Scenario } from '../../domain/schema';
 import { formatYm } from '../../domain/time';
 import { simulate } from '../../engine';
 import { useUnit } from '../AppContext';
-import { CompareChart } from '../charts/Charts';
+import { CompareChart } from '../charts/LazyCharts';
 import { compareRows } from '../charts/chartData';
 import type { OkResult } from '../useSimulation';
 import { netWorthAtAge } from '../pages/DashboardPage';

@@ -9,10 +9,19 @@ export function normalize15(x: number): number {
   return Number(x.toPrecision(15));
 }
 
+/**
+ * 正規化（有効数字 15 桁）で動きうる幅。端数が丸めの境界からこれより離れていれば、
+ * 正規化しても丸め結果は変わらないため、文字列変換を省略できる（性能対策。結果は同一）。
+ */
+function nearBoundary(frac: number, boundary: number, a: number): boolean {
+  return Math.abs(frac - boundary) <= a * 1e-14 + 1e-12;
+}
+
 /** 0 から遠い方向への四捨五入（負数も対称）。 */
 export function roundYen(x: number): number {
   if (!Number.isFinite(x)) throw new Error(`金額が有限数ではありません: ${x}`);
-  const a = normalize15(Math.abs(x));
+  let a = Math.abs(x);
+  if (nearBoundary(a - Math.floor(a), 0.5, a)) a = normalize15(a);
   const r = Math.sign(x) * Math.floor(a + 0.5);
   return r === 0 ? 0 : r; // -0 を 0 にそろえる
 }
@@ -20,7 +29,9 @@ export function roundYen(x: number): number {
 /** 円未満切り捨て（ローン返済額・利息）。正の値のみを想定。 */
 export function floorYen(x: number): number {
   if (!Number.isFinite(x)) throw new Error(`金額が有限数ではありません: ${x}`);
-  const r = Math.floor(normalize15(x));
+  const frac = x - Math.floor(x);
+  const v = nearBoundary(frac, 0, Math.abs(x)) || nearBoundary(frac, 1, Math.abs(x)) ? normalize15(x) : x;
+  const r = Math.floor(v);
   return r === 0 ? 0 : r;
 }
 

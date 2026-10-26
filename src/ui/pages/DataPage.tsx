@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AppData } from '../../domain/schema';
+import { scenarioProblems } from '../../app/importCheck';
 import { ENGINE_VERSION } from '../../engine/version';
 import { backupFileName, buildBackupFile, parseBackupFile, PERSONAL_DATA_NOTICE, type ImportError, type ImportPreview } from '../../storage/backupFile';
 import { migrate } from '../../storage/migrations';
@@ -235,6 +236,16 @@ export function DataPage() {
             <Banner kind="warn">ファイルの内容がエクスポート時から変更されています（整合性チェック不一致）。内容を確認したうえで続行してください。</Banner>
           )}
           {preview.integrity === 'missing' && <Banner kind="warn">整合性情報がありません。</Banner>}
+          {scenarioProblems(preview.data).length > 0 && (
+            <Banner kind="warn">
+              読み込み後、次のシナリオは入力の修正が必要です（計算できません）:
+              <ul>
+                {scenarioProblems(preview.data).map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </Banner>
+          )}
           <Banner kind="warn">現在のデータはこのファイルの内容で置き換えられます（置き換え前のデータは自動退避されます）。</Banner>
         </Dialog>
       )}

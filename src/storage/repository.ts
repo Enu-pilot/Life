@@ -95,7 +95,12 @@ export class Repository {
     if (prev !== undefined) await this.pushBackup(reason, prev);
     try {
       if (next === null) await this.kv.del(DATA_KEY);
-      else await this.kv.set(DATA_KEY, next);
+      else {
+        await this.kv.set(DATA_KEY, next);
+        // 書き込み結果を読み戻して確認する（不一致なら書き戻して失敗扱い）
+        const check = await this.kv.get(DATA_KEY);
+        if (JSON.stringify(check) !== JSON.stringify(next)) throw new Error('保存したデータの確認に失敗しました');
+      }
     } catch (e) {
       if (prev !== undefined) {
         try {
