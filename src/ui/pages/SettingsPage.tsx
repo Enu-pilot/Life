@@ -1,6 +1,8 @@
 import { CURRENT_SCHEMA_VERSION } from '../../domain/schema';
 import { formatPercent } from '../../domain/format';
 import { ENGINE_VERSION } from '../../engine/version';
+import { PENSION_CLAIM } from '../../domain/institution';
+import { EDUCATION_SOURCES } from '../../domain/education';
 import { useActiveScenario, useAppStore, useUnit } from '../AppContext';
 import { Disclaimer } from '../components/common';
 import { SelectField } from '../components/fields';
@@ -18,7 +20,10 @@ export const CALC_ASSUMPTIONS: { title: string; body: string }[] = [
   { title: 'ローン', body: '月利＝年率÷12。毎月返済額と利息は円未満切り捨て、最終回で残高を精算します。返済は毎月（ボーナス払いは未対応）。' },
   { title: '資金不足', body: '生活口座がマイナスになっても計算を続け、資金不足として警告します（マイナス残高に利息は付きません）。自動取り崩しを ON にすると預金→投資の順に補填します。' },
   { title: '丸め', body: '各収支を計上する時点で 1 円単位に四捨五入します（ローンは切り捨て）。残高は丸め済み金額の合計なので誤差は累積しません。' },
-  { title: '未対応', body: '税・社会保険の計算、運用益課税、住宅ローン控除、繰上返済、不動産売却、年金の繰上げ・繰下げ増減額、確率的シミュレーションは未対応です（requirements.md 参照）。' },
+  { title: '簡易推計', body: '「額面で入力」した収入は、利用者が入力した手取り率を掛けて計上します（制度計算ではありません）。投資の手数料は利回りから差し引きます。' },
+  { title: '実質値', body: '表示を「実質値」にすると、物価上昇率で開始時点の物価に割り引いた金額を表示します（計算は名目値で行います）。' },
+  { title: '感度分析', body: '楽観・標準・悲観は利回りと物価上昇率を上下させた試算で、起こる確率を示すものではありません。' },
+  { title: '未対応', body: '所得税・住民税・社会保険料の制度計算、運用益課税・NISA の区別、住宅ローン控除、繰上返済、不動産売却、在職老齢年金・加給年金、医療・介護の専用モデル、確率的シミュレーション（モンテカルロ）は未対応です。' },
 ];
 
 export function SettingsPage() {
@@ -65,6 +70,45 @@ export function SettingsPage() {
             </div>
           ))}
         </dl>
+      </section>
+      <section className="card">
+        <h2>制度パラメータ（出典・施行時期）</h2>
+        <h3>{PENSION_CLAIM.title}（{PENSION_CLAIM.effectiveFrom} 施行）</h3>
+        <ul className="small">
+          {PENSION_CLAIM.early.map((x) => (
+            <li key={x.note}>
+              繰上げ: 1 か月あたり {(x.ratePerMonth * 100).toFixed(1)}% 減（{x.note}）、{PENSION_CLAIM.minAge} 歳から
+            </li>
+          ))}
+          <li>繰下げ: 1 か月あたり {(PENSION_CLAIM.deferralRatePerMonth * 100).toFixed(1)}% 増（66 歳以降）</li>
+          {PENSION_CLAIM.maxAge.map((x) => (
+            <li key={x.note}>
+              繰下げの上限: {x.age} 歳（{x.note}）
+            </li>
+          ))}
+        </ul>
+        <p className="small">簡略化している点:</p>
+        <ul className="small muted">
+          {PENSION_CLAIM.simplifications.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+        <p className="small">出典（確認日）:</p>
+        <ul className="small">
+          {PENSION_CLAIM.sources.map((x) => (
+            <li key={x.url}>
+              {x.publisher}「{x.title}」 {x.url}（{x.checked}）
+            </li>
+          ))}
+        </ul>
+        <h3>教育費の既定値</h3>
+        <ul className="small">
+          {Object.values(EDUCATION_SOURCES).map((x) => (
+            <li key={x.id}>
+              {x.publisher}「{x.title}」 {x.url} — {x.note}
+            </li>
+          ))}
+        </ul>
       </section>
       <section className="card">
         <h2>免責事項</h2>

@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import * as idb from 'idb-keyval';
 import { appData, flow, scenario } from '../../tests/unit/fixtures';
 import { duplicateScenario } from '../domain/factory';
-import { parseAppData } from '../domain/schema';
+import { CURRENT_SCHEMA_VERSION, parseAppData } from '../domain/schema';
+import { simulate } from '../engine';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildBackupFile, parseBackupFile } from './backupFile';
 import { migrate } from './migrations';
 import { MAX_BACKUPS, Repository } from './repository';
@@ -49,7 +52,7 @@ describe('スキーマ検証', () => {
 describe('マイグレーション', () => {
   it('現行版はそのまま', () => {
     const r = migrate(appData());
-    expect(r.ok && r.fromVersion).toBe(1);
+    expect(r.ok && r.fromVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
   it.each([
     [null, 'format'],
@@ -67,7 +70,7 @@ describe('マイグレーション', () => {
     if (!r.ok) expect(r.stage).toBe(stage);
   });
   it('逐次マイグレーションを順に適用し、元のオブジェクトは変更しない（枠組みの検証）', () => {
-    const v1: any = structuredClone(appData());
+    const v1: any = { ...structuredClone(appData()), schemaVersion: 1 };
     const original = structuredClone(v1);
     const order: number[] = [];
     const steps = {
@@ -82,17 +85,57 @@ describe('マイグレーション', () => {
     expect(seen.b).toBe(true);
     expect(v1).toEqual(original);
   });
+  const v1 = () => ({ ...appData(), schemaVersion: 1 });
   it('移行結果のバージョンが不正なら拒否', () => {
-    const r = migrate(appData(), { 1: (d) => d }, 2);
+    const r = migrate(v1(), { 1: (d) => d }, 2);
     expect(!r.ok && r.stage).toBe('migration');
   });
   it('移行関数が例外を投げたら migration 段階で拒否', () => {
-    const r = migrate(appData(), { 1: () => { throw new Error('boom'); } }, 2);
+    const r = migrate(v1(), { 1: () => { throw new Error('boom'); } }, 2);
     expect(!r.ok && r.stage).toBe('migration');
   });
   it('移行関数がない場合は拒否', () => {
-    const r = migrate(appData(), {}, 2);
+    const r = migrate(v1(), {}, 2);
     expect(!r.ok && r.stage).toBe('migration');
+  });
+});
+
+describe('v1 → v2 の移行（実データ fixture）', () => {
+  const raw = JSON.parse(readFileSync(join(__dirname, '../../tests/fixtures/appdata-v1.json'), 'utf8'));
+  it('v1 の保存データを v2 に移行でき、スキーマに適合する', () => {
+    const before = structuredClone(raw);
+    const r = migrate(raw);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fromVersion).toBe(1);
+    expect(r.data.schemaVersion).toBe(2);
+    // 元データは変更しない
+    expect(raw).toEqual(before);
+    // 年金イベントには claimAdjustment: false（従来どおり入力額をそのまま使う）が補われる
+    const pensions = r.data.scenarios[0]!.events.filter((e) => e.type === 'pension');
+    expect(pensions.length).toBeGreaterThan(0);
+    for (const p of pensions) expect(p.type === 'pension' && p.params.claimAdjustment).toBe(false);
+    // それ以外の項目は意味的に等価（設定・シナリオ名・収支・口座）
+    expect(r.data.settings).toEqual(raw.settings);
+    expect(r.data.scenarios[0]!.flows).toEqual(raw.scenarios[0].flows);
+    expect(r.data.scenarios[0]!.accounts).toEqual(raw.scenarios[0].accounts);
+  });
+  it('移行前後で計算結果が変わらない', () => {
+    const r = migrate(raw);
+    if (!r.ok) throw new Error('migrate');
+    const expected = JSON.parse(readFileSync(join(__dirname, '../../tests/golden/G-03-family-education-rent.expected.json'), 'utf8'));
+    const sim = simulate(r.data.scenarios[0]!);
+    expect(sim.ok && sim.yearly.map((y) => y.netWorth)).toEqual(expected.years.map((y: { netWorth: number }) => y.netWorth));
+  });
+  it('Repository は v1 データを読み込むと移行前データを退避し、v2 で保存し直す', async () => {
+    const repo = freshRepo();
+    await repo.kv.set('data', raw);
+    const r = await repo.load();
+    expect(r.status === 'ok' && r.migratedFrom).toBe(1);
+    const backups = await repo.listBackups();
+    expect(backups[0]!.reason).toBe('migration');
+    expect((backups[0]!.data as any).schemaVersion).toBe(1);
+    expect(((await repo.kv.get('data')) as any).schemaVersion).toBe(2);
   });
 });
 
@@ -246,7 +289,7 @@ describe('バックアップファイル', () => {
     ['別アプリ', JSON.stringify({ kind: 'other' }), 'kind'],
     ['新しすぎる形式', JSON.stringify({ kind: 'lifeplan-backup', fileVersion: 99, data: {} }), 'version'],
     ['データ欠落', JSON.stringify({ kind: 'lifeplan-backup', fileVersion: 1 }), 'format'],
-    ['型違い', JSON.stringify({ kind: 'lifeplan-backup', fileVersion: 1, data: { app: 'lifeplan', schemaVersion: 1, scenarios: 1 } }), 'schema'],
+    ['型違い', JSON.stringify({ kind: 'lifeplan-backup', fileVersion: 1, data: { app: 'lifeplan', schemaVersion: 2, scenarios: 1 } }), 'schema'],
   ])('%s は拒否', async (_n, text, stage) => {
     const r = await parseBackupFile(text);
     expect(r.ok).toBe(false);

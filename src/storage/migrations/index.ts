@@ -4,8 +4,38 @@
 import { CURRENT_SCHEMA_VERSION, parseAppData, type AppData } from '../../domain/schema';
 
 type RawObject = Record<string, unknown>;
+/**
+ * v1 → v2（2026-10-26, Phase 5）
+ * - 年金イベントに claimAdjustment（繰上げ・繰下げの自動計算）を追加。既存データは false（従来どおり入力額をそのまま使う）
+ * - 収支の netRatio（額面の簡易推計）、口座の feeRate（手数料）は任意項目のため変換不要
+ */
+function v1ToV2(raw: RawObject): RawObject {
+  const scenarios = Array.isArray(raw.scenarios) ? raw.scenarios : [];
+  return {
+    ...raw,
+    schemaVersion: 2,
+    scenarios: scenarios.map((s) => {
+      if (!s || typeof s !== 'object') return s;
+      const sc = s as RawObject;
+      const events = Array.isArray(sc.events) ? sc.events : sc.events;
+      return {
+        ...sc,
+        events: Array.isArray(events)
+          ? events.map((e) => {
+              const ev = e as RawObject;
+              if (ev && ev.type === 'pension' && ev.params && typeof ev.params === 'object') {
+                return { ...ev, params: { claimAdjustment: false, ...(ev.params as RawObject) } };
+              }
+              return ev;
+            })
+          : events,
+      };
+    }),
+  };
+}
+
 /** キー n のマイグレーションは version n → n+1 に変換する */
-export const MIGRATIONS: Record<number, (raw: RawObject) => RawObject> = {};
+export const MIGRATIONS: Record<number, (raw: RawObject) => RawObject> = { 1: v1ToV2 };
 
 export type MigrateStage = 'format' | 'app' | 'version' | 'migration' | 'schema';
 export type MigrateResult =

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { EXPENSE_CATEGORY_IDS, INCOME_CATEGORY_IDS } from './categories';
 import { isYearMonth } from './time';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export const LIMITS = {
   maxYen: 100_000_000_000, // 1,000 億円
@@ -81,6 +81,11 @@ const flowCoreShape = {
   /** 金額がどの時点の価格か。start = シミュレーション開始時点 / itemStart = 項目の開始時点 */
   growthBase: z.enum(['start', 'itemStart']),
   growthStepMonth: monthNumSchema,
+  /**
+   * v2: 額面入力の簡易推計。指定時は amount を額面とみなし、amount × netRatio を手取りとして計上する（収入のみ）。
+   * 税・社会保険の制度計算ではなく、利用者が入力した手取り率による簡易推計。
+   */
+  netRatio: z.number().gt(0, { message: '0% より大きくしてください' }).max(1, { message: '100% 以下にしてください' }).optional(),
 };
 
 /** 定常収支項目（calculation-spec §8.1）。start = null はシミュレーション開始から。 */
@@ -121,6 +126,8 @@ export const accountSchema = z.object({
   openingBalance: yenSchema,
   /** 運用利回り（税引後）/ 預金金利 / 評価額変動率 / ローン金利（年率） */
   annualRate: rateSchema,
+  /** v2: 投資の年間手数料率（信託報酬など）。実質利回り = annualRate − feeRate */
+  feeRate: z.number().min(0).max(0.1, { message: '10% 以下にしてください' }).optional(),
   /** 負債のみ: 残り返済回数と返済方式 */
   loan: z
     .object({
@@ -251,6 +258,8 @@ export const eventParamsSchemas = {
     annualAmount: yenSchema,
     /** 年金額の伸び率（既定 0 = 名目一定, Q-11） */
     slideRate: rateSchema,
+    /** v2: true の場合、annualAmount を 65 歳受給の見込額とみなし、受給開始年齢に応じた繰上げ・繰下げの増減率を適用する */
+    claimAdjustment: z.boolean(),
   }),
 } as const;
 

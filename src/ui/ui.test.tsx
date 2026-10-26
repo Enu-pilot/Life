@@ -213,3 +213,37 @@ describe('シナリオの複製・切り替え・比較', () => {
     expect(screen.getByText(/収入・支出が未入力のため/)).toBeInTheDocument();
   });
 });
+
+describe('高度な計算モデルの画面', () => {
+  it('年金の繰下げ: 70 歳開始で増減率 ＋42% と年額を表示する', async () => {
+    window.location.hash = '#/events';
+    const { store } = await boot();
+    store.getState().updateActiveScenario((s) => ({ ...s, members: [{ id: 'me', role: 'self', name: '本人', birthYm: '1990-01' }] }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'イベントを追加' }));
+    await user.click(screen.getByRole('button', { name: /年金受給/ }));
+    const dialog = screen.getByRole('dialog');
+    const age = within(dialog).getByLabelText(/受給開始年齢/);
+    await user.clear(age);
+    await user.type(age, '70');
+    await user.type(within(dialog).getByLabelText(/年金額（年額/), '180万');
+    expect(within(dialog).getByText(/増減率 ＋42%（60 か月繰下げ） → 年額 255.6万円/)).toBeInTheDocument();
+  });
+
+  it('名目・実質の切り替えで年次表の値が変わる（物価 2%）', async () => {
+    window.location.hash = '#/projection';
+    const { store } = await boot();
+    store.getState().updateActiveScenario((s) => ({
+      ...s,
+      assumptions: { ...s.assumptions, startYm: '2027-01', endAge: 40, inflationRate: 0.02 },
+      members: [{ id: 'me', role: 'self', name: '本人', birthYm: '1990-01' }],
+      accounts: s.accounts.map((a) => ({ ...a, openingBalance: 10000000 })),
+    }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('tab', { name: '年次表' }));
+    expect(screen.getByTestId('nw-2029')).toHaveTextContent('1,000.0万円');
+    await user.selectOptions(screen.getByRole('combobox', { name: '名目・実質' }), 'real');
+    // 2029-12 は開始から 35 か月後。10,000,000 ÷ 1.02^(35/12) = 9,438,786.56…（Python Decimal）→ 943.9万円
+    expect(screen.getByTestId('nw-2029')).toHaveTextContent('943.9万円');
+  });
+});

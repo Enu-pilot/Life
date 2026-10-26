@@ -103,6 +103,8 @@ export type AccountC = {
   name: string;
   opening: number;
   annualRate: number;
+  /** 年間手数料率（投資のみ）。実質利回り = annualRate − feeRate */
+  feeRate?: number;
   sourceId: string;
   sourceKind: SourceKind;
 };

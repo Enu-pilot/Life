@@ -8,6 +8,9 @@ import { resolveEnd, resolveStart, UnresolvedMemberError } from './triggers';
 import type { AccountC, Ctx, FlowRule, Issue, LoanRule, OneTime, Plan, ResolvedEvent, SimOptions, TransferRuleC } from './types';
 
 const TRANSFERABLE = new Set(['cash', 'savings', 'investment', 'other_asset']);
+/** 額面入力の簡易推計（§18）: 収入で netRatio 指定時は 額面 × 手取り率 を計上額とする */
+const netAmount = (f: { direction: string; amount: number; netRatio?: number | undefined }) =>
+  f.direction === 'income' && f.netRatio !== undefined ? f.amount * f.netRatio : f.amount;
 /** ロケールに依存しない文字コード順の比較（決定性のため） */
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -72,6 +75,7 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
     name: a.name,
     opening: a.openingBalance,
     annualRate: a.annualRate,
+    ...(a.feeRate ? { feeRate: a.feeRate } : {}),
     sourceId: a.id,
     sourceKind: 'account',
   }));
@@ -111,7 +115,7 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
       category: f.category,
       from: r.from,
       to: r.to,
-      amount: f.amount,
+      amount: netAmount(f),
       months: f.frequency === 'monthly' ? null : (f.months ?? []),
       growth: f.growth,
       growthBase: growthBaseOf(f.growthBase, r.from),
@@ -211,7 +215,7 @@ export function compile(s: Scenario, opts: SimOptions = {}): { plan: Plan | null
           category: t.category,
           from: month,
           to,
-          amount: t.amount,
+          amount: netAmount(t),
           months: t.frequency === 'monthly' ? null : (t.months ?? []),
           growth: t.growth,
           growthBase: growthBaseOf(t.growthBase, month),

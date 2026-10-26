@@ -2,7 +2,9 @@ import { COURSE_LABEL, EDUCATION_DEFAULTS, EDUCATION_SOURCES, UNIVERSITY_ENTRANC
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../domain/categories';
 import { formatMoney } from '../../domain/format';
 import type { FlowTemplate, Growth, LifeEvent, LoanTerms, Scenario } from '../../domain/schema';
-import { equalPayment } from '../../engine';
+import { equalPayment, pensionClaimFactor } from '../../engine';
+import { PENSION_CLAIM } from '../../domain/institution';
+import { birthsOf } from '../validators';
 import { useUnit } from '../AppContext';
 import { CheckboxField, IntField, PercentField, SelectField, TextField, YenField, YmField } from '../components/fields';
 import { FlowFields } from '../components/FlowFields';
@@ -356,9 +358,31 @@ export function EventParamsForm({ value, onChange, errors, scenario }: Props<Lif
           />
           <YenField label="年金額（年額・手取り見込み・現在の価値）" required value={e.params.annualAmount} onChange={(annualAmount) => set({ annualAmount })} error={errors['params.annualAmount']} hint="ねんきん定期便などの見込額を参考に入力" />
           <PercentField label="年金額の伸び率（年率）" value={e.params.slideRate} onChange={(slideRate) => set({ slideRate })} hint="既定 0%（名目一定）。物価より低く設定するのが保守的です" />
+          <CheckboxField
+            label="繰上げ・繰下げの増減を自動計算する（年金額は 65 歳受給の見込額を入力）"
+            checked={e.params.claimAdjustment}
+            onChange={(claimAdjustment) => set({ claimAdjustment })}
+            hint={`${PENSION_CLAIM.title}（${PENSION_CLAIM.effectiveFrom} 施行）: 繰上げ 1 か月 0.4% 減（昭和37年4月1日以前生まれは 0.5%）、繰下げ 1 か月 0.7% 増（66 歳以降、上限 75 歳／昭和27年4月1日以前生まれは 70 歳）。出典: 日本年金機構`}
+          />
+          {e.params.claimAdjustment && <ClaimPreview event={e} scenario={scenario} />}
         </div>
       );
   }
+}
+
+function ClaimPreview({ event, scenario }: { event: Extract<LifeEvent, { type: 'pension' }>; scenario: Scenario }) {
+  const unit = useUnit();
+  const birth = birthsOf(scenario).get(event.params.memberId);
+  if (birth === undefined || event.trigger.type !== 'age') return null;
+  const r = pensionClaimFactor(birth, event.trigger.age, event.trigger.month !== undefined);
+  if ('reason' in r) return <p className="field__error">増減率を適用できません: {r.reason}</p>;
+  const amount = Number.isFinite(event.params.annualAmount) ? event.params.annualAmount * r.factor : null;
+  return (
+    <p className="small">
+      増減率 {r.months === 0 ? '0%（65 歳受給）' : `${r.months > 0 ? '＋' : '−'}${Math.round(Math.abs(r.factor - 1) * 1000) / 10}%（${Math.abs(r.months)} か月${r.months > 0 ? '繰下げ' : '繰上げ'}）`}
+      {amount !== null && ` → 年額 ${formatMoney(Math.round(amount), unit)}`}
+    </p>
+  );
 }
 
 export function eventTitle(e: LifeEvent): string {

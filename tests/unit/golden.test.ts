@@ -3,7 +3,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseAppData, type Scenario } from '../../src/domain/schema';
+import type { Scenario } from '../../src/domain/schema';
+import { migrate } from '../../src/storage/migrations';
 import { simulate } from '../../src/engine';
 
 const DIR = join(__dirname, '../golden');
@@ -16,10 +17,13 @@ describe('ゴールデンテスト（独立実装との完全一致）', () => {
 
   for (const file of cases) {
     it(file.replace('.scenario.json', ''), () => {
-      const scenario = JSON.parse(readFileSync(join(DIR, file), 'utf8')) as Scenario;
-      // 入力がスキーマに適合することも確認
-      const wrapped = parseAppData({ app: 'lifeplan', schemaVersion: 1, savedAt: '', settings: { displayUnit: 'yen' }, activeScenarioId: scenario.id, scenarios: [scenario] });
-      expect(wrapped.ok, JSON.stringify(!wrapped.ok && wrapped.issues)).toBe(true);
+      const v1 = JSON.parse(readFileSync(join(DIR, file), 'utf8'));
+      // ゴールデンの入力は v1 形式のまま保管し、現行形式へのマイグレーションを通してから計算する
+      // （移行後も計算結果が変わらないことの確認を兼ねる）
+      const migrated = migrate({ app: 'lifeplan', schemaVersion: 1, savedAt: '', settings: { displayUnit: 'yen' }, activeScenarioId: v1.id, scenarios: [v1] });
+      expect(migrated.ok, JSON.stringify(!migrated.ok && migrated)).toBe(true);
+      if (!migrated.ok) return;
+      const scenario: Scenario = migrated.data.scenarios[0]!;
       const expected = JSON.parse(readFileSync(join(DIR, file.replace('.scenario.json', '.expected.json')), 'utf8'));
       const r = simulate(scenario);
       expect(r.ok, JSON.stringify(r.issues)).toBe(true);

@@ -24,6 +24,7 @@ const flowArb = (i: number) =>
     growth: growthArb,
     growthBase: fc.constantFrom('start' as const, 'itemStart' as const),
     growthStepMonth: fc.integer({ min: 1, max: 12 }),
+    netRatio: fc.option(fc.constantFrom(0.75, 0.8, 0.83), { nil: undefined }),
   }).map(
     (f): FlowItem => ({
       id: `f${i}`,
@@ -31,6 +32,7 @@ const flowArb = (i: number) =>
       category: f.direction === 'income' ? 'salary' : 'living',
       ...f,
       months: f.frequency === 'months' ? f.months : undefined,
+      netRatio: f.direction === 'income' ? f.netRatio : undefined,
     }),
   );
 
@@ -89,7 +91,7 @@ const eventArb = (i: number, nFlow: number) =>
             params: { price: Math.floor(p.price / 10), priceGrowth: g, downPayment: Math.floor(down / 10), loan: p.useLoan ? p.loan : null, cycleYears: p.cycle, purchaseCount: p.count, maintenanceYearly: p.amount / 5 > 0 ? Math.floor(p.amount / 5) : 0, maintenanceGrowth: p.growth, depreciationRate: -Math.abs(p.rate), holdUntil: p.hold ? { type: 'date', ym: p.hold } : null },
           };
         case 'pension':
-          return { ...common, type: 'pension', params: { memberId: 'self', annualAmount: p.amount, slideRate: Math.abs(p.rate) / 10 } };
+          return { ...common, type: 'pension', params: { memberId: 'self', annualAmount: p.amount, slideRate: Math.abs(p.rate) / 10, claimAdjustment: p.useLoan } };
         case 'retirement':
           return { ...common, type: 'retirement', params: { severance: p.price, flows: [] } };
         default:
@@ -109,6 +111,7 @@ const accountArb = (i: number) =>
       annualRate: rateArb,
       remainingMonths: fc.integer({ min: 1, max: 400 }),
       method: fc.constantFrom('equal_payment' as const, 'equal_principal' as const),
+      feeRate: fc.constantFrom(0, 0.001, 0.0093),
     })
     .map(
       (a): Account => ({
@@ -117,6 +120,7 @@ const accountArb = (i: number) =>
         kind: a.kind,
         openingBalance: a.openingBalance,
         annualRate: a.kind === 'loan' ? Math.abs(a.annualRate) : a.annualRate,
+        ...(a.kind === 'investment' && a.feeRate > 0 ? { feeRate: a.feeRate } : {}),
         ...(a.kind === 'loan' ? { loan: { remainingMonths: a.remainingMonths, method: a.method } } : {}),
       }),
     );

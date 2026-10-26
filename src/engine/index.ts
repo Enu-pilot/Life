@@ -6,3 +6,5 @@ export { resolveEnd, resolveStart } from './triggers';
 export { ENGINE_VERSION } from './version';
 export * from './types';
 export { explainYear, type YearExplanation, type ExplainLine } from './explain';
+export { deflate, priceIndex, toReal } from './real';
+export { pensionClaimFactor } from './events';

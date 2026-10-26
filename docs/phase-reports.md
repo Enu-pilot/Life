@@ -209,3 +209,42 @@ Phase 4 の項目をすべて満たした。
 
 ### 7. 次 Phase へ進む条件
 承認済み（連続実装）。
+
+---
+
+## Phase 5: 高度な計算モデル（2026-10-26）
+
+### 1. 変更ファイル
+- ドメイン: `src/domain/institution.ts`（制度パラメータと出典）, `src/domain/schema.ts`（v2）
+- 永続化: `src/storage/migrations/index.ts`（v1 → v2）, `tests/fixtures/appdata-v1.json`
+- エンジン: `src/engine/real.ts`, `src/engine/events/index.ts`（年金の増減率）, `src/engine/compile.ts`（手取り率）, `src/engine/simulate.ts`（手数料）
+- 独立参照実装: `tools/verify/lifeplan_ref.py`（同じ 3 モデルを追加）
+- UI: `src/ui/components/{FlowFields,Sensitivity}.tsx`, `src/ui/events/EventForm.tsx`, `src/ui/pages/{FinancesPage,ProjectionPage,SettingsPage}.tsx`
+- テスト: `src/engine/advanced.test.ts`, `src/storage/storage.test.ts`, `tests/unit/{golden.test.ts,arbitraries.ts}`, `src/ui/ui.test.tsx`
+- 文書: `docs/calculation-spec.md` §18
+
+### 2. 実装内容
+**実装済み**: 公的年金の繰上げ・繰下げ（制度計算・一次情報で検証）、額面入力の手取り推計（簡易推計）、投資の手数料、実質購買力（名目／実質の表示切替）、楽観・標準・悲観の感度分析。制度値の施行時期・条件・出典・簡略化内容を設定画面に表示。
+
+**未実装（明示）**: calculation-spec §18「未対応」を参照（税・社会保険の制度計算、運用益課税、住宅ローン控除、在職老齢年金ほか）。
+
+### 3. 実行したテストと結果
+| コマンド | 結果 |
+|---|---|
+| `npx tsc -p .` | 成功 |
+| `npx vitest run` | 14 ファイル 219 件すべて成功（ゴールデンは v1 入力を v2 に移行してから計算し、期待値と完全一致。クロスチェックは手取り率・手数料・繰上げ／繰下げを含むランダム 40 シナリオで完全一致） |
+
+### 4. 完了条件
+Phase 5 の項目をすべて満たした。
+
+### 5. 既知の問題・テスト中の発見
+- 期待値の訂正（独立計算による）: 64 歳開始の年金月額（142,200 → 142,800）、実質値の表示（944.0 → 943.9 万円）。いずれもテストに書いた暗算の誤りで、Python Decimal で確認して訂正した
+- テストの設定誤り（計算開始前に受給開始となる生年）を修正
+- 繰上げ・繰下げは誕生月基準の簡易な月数計算（実際は「65 歳に達した日」の前日基準）。1 か月程度のずれが生じうる
+
+### 6. 決定事項
+- schemaVersion 2、engineVersion 0.5.0
+- 新しく作る年金イベントは繰上げ・繰下げの自動計算を既定で ON（年金額は 65 歳受給の見込額を入力）。v1 から移行したイベントは OFF のまま
+
+### 7. 次 Phase へ進む条件
+承認済み（連続実装）。

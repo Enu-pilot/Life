@@ -81,7 +81,8 @@ function AccountDialog({ initial, scenario, onClose }: { initial: Account; scena
     const e = validateAccount(a, scenario);
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    const clean: Account = a.kind === 'loan' ? a : (({ loan: _l, ...r }) => (void _l, r))(a);
+    const noLoan: Account = a.kind === 'loan' ? a : (({ loan: _l, ...r }) => (void _l, r))(a);
+    const clean: Account = a.kind === 'investment' ? noLoan : (({ feeRate: _f, ...r }) => (void _f, r))(noLoan);
     store.getState().updateActiveScenario((s) => ({
       ...s,
       accounts: isNew ? [...s.accounts, clean] : s.accounts.map((x) => (x.id === a.id ? clean : x)),
@@ -117,6 +118,19 @@ function AccountDialog({ initial, scenario, onClose }: { initial: Account; scena
         error={errors.openingBalance}
       />
       <PercentField label={RATE_LABEL[a.kind]} value={a.annualRate} onChange={(annualRate) => setA({ ...a, annualRate })} error={errors.annualRate} />
+      {a.kind === 'investment' && (
+        <PercentField
+          label="年間手数料（信託報酬など）"
+          value={a.feeRate ?? 0}
+          onChange={(feeRate) => {
+            const { feeRate: _f, ...rest } = a;
+            void _f;
+            setA(feeRate === 0 ? rest : { ...rest, feeRate });
+          }}
+          error={errors.feeRate}
+          hint="実質利回り = 期待利回り − 手数料（簡易）。期待利回りが手数料控除後の場合は 0% のまま"
+        />
+      )}
       {a.kind === 'loan' && a.loan && (
         <>
           <IntField
@@ -325,7 +339,10 @@ export function FinancesPage({ initialTab = 'income' }: { initialTab?: Tab }) {
                     <td>{a.name}</td>
                     <td>{ACCOUNT_KIND_LABEL[a.kind]}</td>
                     <td className="num">{a.kind === 'loan' ? '−' : ''}{formatMoney(a.openingBalance, unit)}</td>
-                    <td className="num">{formatPercent(a.annualRate)}</td>
+                    <td className="num">
+                      {formatPercent(a.annualRate)}
+                      {a.feeRate ? <div className="muted small">手数料 {formatPercent(a.feeRate)}</div> : null}
+                    </td>
                     <td className="table__actions">
                       <button type="button" className="btn btn--small" onClick={() => setAccount(a)}>
                         編集

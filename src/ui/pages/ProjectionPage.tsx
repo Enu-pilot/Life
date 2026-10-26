@@ -9,6 +9,8 @@ import { Banner, Disclaimer } from '../components/common';
 import { Issues } from '../components/Issues';
 import { YearDetail } from '../components/YearDetail';
 import { YearTable } from '../components/YearTable';
+import { Sensitivity } from '../components/Sensitivity';
+import { toReal } from '../../engine';
 import { EVENT_META } from '../events/defaults';
 import { useSimulation, type OkResult } from '../useSimulation';
 import type { EventType } from '../../domain/schema';
@@ -84,6 +86,8 @@ export function ProjectionPage() {
   const [tab, setTab] = useState<'graph' | 'table'>('graph');
   const [flowMode, setFlowMode] = useState<'yearly' | 'monthly'>('yearly');
   const [flowYear, setFlowYear] = useState<number | null>(null);
+  const [real, setReal] = useState(false);
+  const shown = result.ok && real ? toReal(result, scenario.assumptions.inflationRate) : result;
   return (
     <div className="page">
       <h1>資産推移</h1>
@@ -93,6 +97,16 @@ export function ProjectionPage() {
           <p className="muted">
             シナリオ「{scenario.name}」／計算期間 {formatYmJa(formatYm(result.start))} 〜 {formatYmJa(formatYm(result.end))}（月次計算・暦年集計）／物価上昇率 {(scenario.assumptions.inflationRate * 100).toFixed(2)}%
           </p>
+          <div className="actions" style={{ marginTop: 0 }}>
+            <label className="small">
+              表示:{' '}
+              <select aria-label="名目・実質" value={real ? 'real' : 'nominal'} onChange={(e) => setReal(e.target.value === 'real')}>
+                <option value="nominal">名目値（将来の金額そのまま）</option>
+                <option value="real">実質値（{formatYmJa(formatYm(result.start))}時点の物価に換算）</option>
+              </select>
+            </label>
+            {real && <span className="muted small">物価上昇率 {(scenario.assumptions.inflationRate * 100).toFixed(2)}% で割り引いた購買力の目安です（表示のみ。年次の値は各年の最終月の物価で換算）。</span>}
+          </div>
           <div className="tabs" role="tablist">
             <button type="button" role="tab" aria-selected={tab === 'graph'} className={`tab${tab === 'graph' ? ' tab--active' : ''}`} onClick={() => setTab('graph')}>
               グラフ
@@ -105,7 +119,7 @@ export function ProjectionPage() {
             <>
               <section className="card">
                 <h2>資産・負債と純資産（年末）</h2>
-                <AssetChart result={result} unit={unit} />
+                <AssetChart result={shown.ok ? shown : result} unit={unit} />
                 <p className="legend-note">積み上げ面は資産の内訳（負債は 0 より下）、黒い線は純資産。点線はイベント、赤い帯は資金不足の年です。値は「年次表」タブでも確認できます。</p>
               </section>
               <section className="card">
@@ -127,7 +141,7 @@ export function ProjectionPage() {
                     )}
                   </div>
                 </div>
-                <CashflowChart rows={flowMode === 'yearly' ? yearlyCashflow(result) : monthlyCashflow(result, flowYear ?? result.yearly[0]!.year)} unit={unit} />
+                <CashflowChart rows={flowMode === 'yearly' ? yearlyCashflow(shown.ok ? shown : result) : monthlyCashflow(shown.ok ? shown : result, flowYear ?? result.yearly[0]!.year)} unit={unit} />
                 <p className="legend-note">支出は 0 より下に表示。収支 = 収入 − 支出（積立・ローン元本返済・資産購入は含みません）。</p>
                 {flowMode === 'monthly' && (
                   <div className="table-wrap">
@@ -141,7 +155,7 @@ export function ProjectionPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {monthlyCashflow(result, flowYear ?? result.yearly[0]!.year).map((r) => (
+                        {monthlyCashflow(shown.ok ? shown : result, flowYear ?? result.yearly[0]!.year).map((r) => (
                           <tr key={r.key} className={r.shortfall ? 'row--alert' : ''}>
                             <td>{r.label}</td>
                             <td className="num">{formatMoney(r.income, unit)}</td>
@@ -153,6 +167,10 @@ export function ProjectionPage() {
                     </table>
                   </div>
                 )}
+              </section>
+              <section className="card">
+                <h2>楽観・標準・悲観（感度分析）</h2>
+                <Sensitivity scenario={scenario} />
               </section>
               <section className="card">
                 <h2>資金不足の確認</h2>
@@ -167,8 +185,8 @@ export function ProjectionPage() {
           {tab === 'table' && (
             <section className="card">
               <h2>年次表</h2>
-              <p className="muted small">行を選ぶと、その年の明細と期首→期末の内訳を表示します。</p>
-              <YearTable result={result} unit={unit} onSelect={setYear} />
+              <p className="muted small">{real ? '実質値で表示中です。明細（期首→期末の内訳）は名目値で確認できます。' : '行を選ぶと、その年の明細と期首→期末の内訳を表示します。'}</p>
+              <YearTable result={shown.ok ? shown : result} unit={unit} {...(real ? {} : { onSelect: setYear })} />
             </section>
           )}
           {year !== null && <YearDetail result={result} year={year} unit={unit} onClose={() => setYear(null)} />}

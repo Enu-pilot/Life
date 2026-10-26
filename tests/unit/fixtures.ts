@@ -20,7 +20,7 @@ export function scenario(over: Partial<Scenario> = {}): Scenario {
 export function appData(scenarios: Scenario[] = [scenario()]): AppData {
   return {
     app: 'lifeplan',
-    schemaVersion: 1,
+    schemaVersion: 2,
     savedAt: '2026-01-01T00:00:00.000Z',
     settings: { displayUnit: 'man' },
     activeScenarioId: scenarios[0]!.id,

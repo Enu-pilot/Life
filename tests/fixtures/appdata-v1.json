@@ -1,0 +1,386 @@
+{
+ "app": "lifeplan",
+ "schemaVersion": 1,
+ "savedAt": "2026-10-26T00:00:00.000Z",
+ "settings": {
+  "displayUnit": "man",
+  "lastExportedAt": "2026-10-20T00:00:00.000Z"
+ },
+ "activeScenarioId": "g",
+ "scenarios": [
+  {
+   "id": "g",
+   "name": "G-03-family-education-rent",
+   "createdAt": "",
+   "updatedAt": "",
+   "flows": [
+    {
+     "id": "sal1",
+     "direction": "income",
+     "name": "sal1",
+     "category": "salary",
+     "amount": 380000,
+     "frequency": "monthly",
+     "start": null,
+     "end": {
+      "type": "age",
+      "memberId": "me",
+      "age": 60,
+      "month": 3
+     },
+     "growth": {
+      "type": "fixed",
+      "rate": 0.015
+     },
+     "growthBase": "start",
+     "growthStepMonth": 4
+    },
+    {
+     "id": "sal2",
+     "direction": "income",
+     "name": "sal2",
+     "category": "salary",
+     "amount": 220000,
+     "frequency": "monthly",
+     "start": null,
+     "end": {
+      "type": "age",
+      "memberId": "sp",
+      "age": 60,
+      "endMode": "before"
+     },
+     "growth": {
+      "type": "none"
+     },
+     "growthBase": "start",
+     "growthStepMonth": 1,
+     "ownerId": "sp"
+    },
+    {
+     "id": "living",
+     "direction": "expense",
+     "name": "living",
+     "category": "living",
+     "amount": 280000,
+     "frequency": "monthly",
+     "start": null,
+     "end": null,
+     "growth": {
+      "type": "inflation"
+     },
+     "growthBase": "start",
+     "growthStepMonth": 1
+    },
+    {
+     "id": "teate",
+     "direction": "income",
+     "name": "teate",
+     "category": "allowance",
+     "amount": 10000,
+     "frequency": "monthly",
+     "start": null,
+     "end": {
+      "type": "age",
+      "memberId": "c1",
+      "age": 18,
+      "month": 3
+     },
+     "growth": {
+      "type": "none"
+     },
+     "growthBase": "start",
+     "growthStepMonth": 1,
+     "ownerId": "c1"
+    }
+   ],
+   "transfers": [
+    {
+     "id": "t",
+     "name": "積立",
+     "fromId": "cash",
+     "toId": "inv",
+     "amount": 50000,
+     "frequency": "monthly",
+     "start": null,
+     "end": {
+      "type": "age",
+      "memberId": "me",
+      "age": 60,
+      "endMode": "before"
+     },
+     "growth": {
+      "type": "none"
+     },
+     "growthBase": "start",
+     "growthStepMonth": 1
+    }
+   ],
+   "events": [
+    {
+     "id": "rent1",
+     "type": "rent",
+     "name": "rent1",
+     "enabled": true,
+     "trigger": {
+      "type": "date",
+      "ym": "2027-04"
+     },
+     "endsIds": [],
+     "params": {
+      "monthlyRent": 120000,
+      "renewalFee": 120000,
+      "renewalIntervalYears": 2,
+      "initialCost": 0,
+      "growth": {
+       "type": "inflation"
+      },
+      "end": null
+     }
+    },
+    {
+     "id": "move",
+     "type": "rent",
+     "name": "move",
+     "enabled": true,
+     "trigger": {
+      "type": "date",
+      "ym": "2030-10"
+     },
+     "endsIds": [
+      "rent1"
+     ],
+     "params": {
+      "monthlyRent": 150000,
+      "renewalFee": 150000,
+      "renewalIntervalYears": 2,
+      "initialCost": 600000,
+      "growth": {
+       "type": "none"
+      },
+      "end": null
+     }
+    },
+    {
+     "id": "born2",
+     "type": "birth",
+     "name": "born2",
+     "enabled": true,
+     "trigger": {
+      "type": "date",
+      "ym": "2028-05"
+     },
+     "endsIds": [],
+     "params": {
+      "childName": "第二子",
+      "cost": 100000,
+      "flows": [
+       {
+        "key": "care",
+        "direction": "expense",
+        "name": "care",
+        "category": "childcare",
+        "amount": 30000,
+        "frequency": "monthly",
+        "end": {
+         "type": "age",
+         "memberId": "born2:child",
+         "age": 6,
+         "endMode": "before"
+        },
+        "growth": {
+         "type": "none"
+        },
+        "growthBase": "start",
+        "growthStepMonth": 1
+       },
+       {
+        "key": "teate",
+        "direction": "income",
+        "name": "teate",
+        "category": "allowance",
+        "amount": 15000,
+        "frequency": "monthly",
+        "end": {
+         "type": "age",
+         "memberId": "born2:child",
+         "age": 3,
+         "endMode": "before"
+        },
+        "growth": {
+         "type": "none"
+        },
+        "growthBase": "start",
+        "growthStepMonth": 1
+       }
+      ]
+     }
+    },
+    {
+     "id": "edu1",
+     "type": "education",
+     "name": "edu1",
+     "enabled": true,
+     "trigger": {
+      "type": "school",
+      "memberId": "c1",
+      "stage": "kindergarten"
+     },
+     "endsIds": [],
+     "params": {
+      "memberId": "c1",
+      "kindergarten": "private",
+      "elementary": "public",
+      "junior": "public",
+      "high": "private",
+      "university": "private_arts",
+      "overrides": {},
+      "growth": {
+       "type": "inflation"
+      }
+     }
+    },
+    {
+     "id": "edu2",
+     "type": "education",
+     "name": "edu2",
+     "enabled": true,
+     "trigger": {
+      "type": "school",
+      "memberId": "born2:child",
+      "stage": "kindergarten"
+     },
+     "endsIds": [],
+     "params": {
+      "memberId": "born2:child",
+      "kindergarten": "public",
+      "elementary": "public",
+      "junior": "private",
+      "high": "public",
+      "university": "national",
+      "overrides": {
+       "high:public": 500000
+      },
+      "growth": {
+       "type": "none"
+      }
+     }
+    },
+    {
+     "id": "trip",
+     "type": "one_time",
+     "name": "trip",
+     "enabled": true,
+     "trigger": {
+      "type": "date",
+      "ym": "2029-08"
+     },
+     "endsIds": [],
+     "params": {
+      "direction": "expense",
+      "amount": 400000,
+      "category": "leisure",
+      "growth": {
+       "type": "inflation"
+      }
+     }
+    },
+    {
+     "id": "p1",
+     "type": "pension",
+     "name": "p1",
+     "enabled": true,
+     "trigger": {
+      "type": "age",
+      "memberId": "me",
+      "age": 65
+     },
+     "endsIds": [],
+     "params": {
+      "memberId": "me",
+      "annualAmount": 1800000,
+      "slideRate": 0
+     }
+    },
+    {
+     "id": "p2",
+     "type": "pension",
+     "name": "p2",
+     "enabled": true,
+     "trigger": {
+      "type": "age",
+      "memberId": "sp",
+      "age": 65
+     },
+     "endsIds": [],
+     "params": {
+      "memberId": "sp",
+      "annualAmount": 800000,
+      "slideRate": 0.005
+     }
+    },
+    {
+     "id": "disabled",
+     "type": "one_time",
+     "name": "disabled",
+     "enabled": false,
+     "trigger": {
+      "type": "date",
+      "ym": "2030-01"
+     },
+     "endsIds": [],
+     "params": {
+      "direction": "expense",
+      "amount": 99999999,
+      "category": "leisure",
+      "growth": {
+       "type": "none"
+      }
+     }
+    }
+   ],
+   "assumptions": {
+    "startYm": "2027-04",
+    "endAge": 75,
+    "inflationRate": 0.01,
+    "defaultReturnRate": 0.03,
+    "autoLiquidate": false
+   },
+   "members": [
+    {
+     "id": "me",
+     "role": "self",
+     "name": "本人",
+     "birthYm": "1992-08"
+    },
+    {
+     "id": "sp",
+     "role": "spouse",
+     "name": "配偶者",
+     "birthYm": "1993-02"
+    },
+    {
+     "id": "c1",
+     "role": "child",
+     "name": "長子",
+     "birthYm": "2024-03"
+    }
+   ],
+   "accounts": [
+    {
+     "id": "cash",
+     "kind": "cash",
+     "name": "生活口座",
+     "openingBalance": 4000000,
+     "annualRate": 0
+    },
+    {
+     "id": "inv",
+     "kind": "investment",
+     "name": "NISA",
+     "openingBalance": 1500000,
+     "annualRate": 0.035
+    }
+   ]
+  }
+ ]
+}

@@ -1,6 +1,6 @@
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../domain/categories';
 import type { FlowTemplate, Growth, Trigger } from '../../domain/schema';
-import { MonthsField, PercentField, SelectField, TextField, YenField } from './fields';
+import { CheckboxField, MonthsField, PercentField, SelectField, TextField, YenField } from './fields';
 import { TriggerField, type MemberOption } from './TriggerField';
 
 /** FlowItem / FlowTemplate 共通の入力項目（id・key・start を除く） */
@@ -49,7 +49,13 @@ export function FlowFields({
           value={v.amount}
           onChange={(amount) => onChange({ ...v, amount })}
           error={errors.amount}
-          hint={v.direction === 'income' ? '手取り額で入力してください（税・社会保険料は計算しません）' : undefined}
+          hint={
+            v.direction === 'income'
+              ? v.netRatio !== undefined
+                ? `額面で入力。計上額 = 額面 × 手取り率（簡易推計）`
+                : '手取り額で入力してください（税・社会保険料は計算しません）'
+              : undefined
+          }
         />
         <SelectField
           label="対象者（任意）"
@@ -71,6 +77,21 @@ export function FlowFields({
           ]}
         />
       </div>
+      {v.direction === 'income' && (
+        <div className="grid2">
+          <CheckboxField
+            label="額面で入力し、手取り率で簡易推計する"
+            checked={v.netRatio !== undefined}
+            onChange={(on) => {
+              const { netRatio: _n, ...rest } = v;
+              void _n;
+              onChange(on ? { ...rest, netRatio: 0.8 } : rest);
+            }}
+            hint="簡易推計です。所得税・住民税・社会保険料の制度計算は行いません。手取り率は給与明細や源泉徴収票から求めた実績値を入力してください。"
+          />
+          {v.netRatio !== undefined && <PercentField label="手取り率" value={v.netRatio} onChange={(netRatio) => onChange({ ...v, netRatio })} error={errors.netRatio} />}
+        </div>
+      )}
       {v.frequency === 'months' && <MonthsField label="発生月" value={v.months ?? []} onChange={(months) => onChange({ ...v, months })} error={errors.months} />}
       <div className="grid2">
         {startSlot}

@@ -59,7 +59,7 @@ export function runPlan(plan: Plan, opts: SimOptions = {}): { ledger: Ledger; mo
     // 2. 運用損益・利息（期首残高に月利を適用）
     for (const a of plan.accounts) {
       if (a.kind !== 'cash' && a.kind !== 'savings' && a.kind !== 'investment') continue;
-      const rate = a.annualRate + (a.kind === 'investment' ? returnShift : 0);
+      const rate = a.annualRate - (a.feeRate ?? 0) + (a.kind === 'investment' ? returnShift : 0);
       const bal = ledger.balance(a.id);
       if (rate === 0 || bal <= 0) continue;
       const r = roundYen(bal * monthlyRate(rate));

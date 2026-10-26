@@ -248,7 +248,7 @@ describe('結婚・出産・教育費・年金・一時支出・退職', () => {
     const r = ok(
       scenario({
         assumptions: { ...scenario().assumptions, endAge: 70 },
-        events: [ev('p', 'pension', { type: 'age', memberId: 'self', age: 65 }, { memberId: 'self', annualAmount: 1800000, slideRate: 0 })],
+        events: [ev('p', 'pension', { type: 'age', memberId: 'self', age: 65 }, { memberId: 'self', annualAmount: 1800000, slideRate: 0, claimAdjustment: false })],
       }),
     );
     expect(at(r, '2054-12').income).toBe(0);
@@ -364,7 +364,7 @@ describe('複数イベントの組み合わせ', () => {
           { ...home({ price: 50000000, downPayment: 6000000, closingCosts: 3500000, loan: { annualRate: 0.009, termMonths: 420, method: 'equal_principal', rateChanges: [{ afterMonths: 60, annualRate: 0.02 }] }, propertyTaxYearly: 160000, maintenanceMonthly: 28000, revaluationRate: -0.015 }), endsIds: ['rent'] },
           ev('car', 'car', date('2029-04'), { price: 3500000, priceGrowth: { type: 'inflation' }, downPayment: 1000000, loan: { annualRate: 0.025, termMonths: 60, method: 'equal_payment', rateChanges: [] }, cycleYears: 7, purchaseCount: 4, maintenanceYearly: 400000, maintenanceGrowth: { type: 'inflation' }, depreciationRate: -0.18, holdUntil: { type: 'age', memberId: 'self', age: 75 } }),
           ev('ret', 'retirement', { type: 'age', memberId: 'self', age: 60 }, { severance: 18000000, flows: [] }, ['sal']),
-          ev('pen', 'pension', { type: 'age', memberId: 'self', age: 65 }, { memberId: 'self', annualAmount: 2100000, slideRate: 0.002 }),
+          ev('pen', 'pension', { type: 'age', memberId: 'self', age: 65 }, { memberId: 'self', annualAmount: 2100000, slideRate: 0.002, claimAdjustment: false }),
         ],
       }),
     );
@@ -379,7 +379,7 @@ import { parseAppData } from '../../domain/schema';
 describe('サンプルデータ', () => {
   it('スキーマに適合し、警告なしで計算でき、不変条件が成立する', () => {
     const s = sampleScenario(new Date('2026-10-26T00:00:00'));
-    expect(parseAppData({ app: 'lifeplan', schemaVersion: 1, savedAt: '', settings: { displayUnit: 'man' }, activeScenarioId: s.id, scenarios: [s] }).ok).toBe(true);
+    expect(parseAppData({ app: 'lifeplan', schemaVersion: 2, savedAt: '', settings: { displayUnit: 'man' }, activeScenarioId: s.id, scenarios: [s] }).ok).toBe(true);
     const r = ok(s);
     expect(r.issues).toEqual([]);
     expect(checkInvariants(r)).toEqual([]);

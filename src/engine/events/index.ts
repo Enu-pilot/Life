@@ -2,9 +2,10 @@
 // 生成物はイベント ID を接頭辞とする決定的な ID を持ち、計算のたびに作り直す（保存データには書き戻さない）。
 
 import { EDUCATION_DEFAULTS, UNIVERSITY_ENTRANCE_DEFAULTS } from '../../domain/education';
+import { PENSION_CLAIM } from '../../domain/institution';
 import { roundYen } from '../../domain/money';
 import type { Growth, LoanTerms } from '../../domain/schema';
-import { monthIndexOf, STAGE_YEARS, stageEntry, yearOf, type MonthIndex, type SchoolStage } from '../../domain/time';
+import { monthIndexOf, parseYm, STAGE_YEARS, stageEntry, yearOf, type MonthIndex, type SchoolStage } from '../../domain/time';
 import { amountAt } from '../growth';
 import { EXTERNAL } from '../types';
 import { registerExpander, type ExpandApi } from './registry';
@@ -219,11 +220,37 @@ registerExpander('car', (e, api) => {
   }
 });
 
+/**
+ * 繰上げ・繰下げの増減率（§18）。制度パラメータは domain/institution.ts。
+ * 対象外（年齢指定でない、範囲外）の場合は理由を返す。
+ */
+export function pensionClaimFactor(birth: MonthIndex, startAge: number, startMonthSpecified: boolean): { factor: number; months: number } | { reason: string } {
+  const P = PENSION_CLAIM;
+  if (startMonthSpecified) return { reason: '受給開始を「年齢（誕生月）」で指定した場合のみ自動計算できます' };
+  const months = (startAge - P.normalAge) * 12;
+  const maxAge = P.maxAge.find((x) => x.bornFromYm === null || birth >= parseYm(x.bornFromYm))!.age;
+  if (startAge < P.minAge || startAge > maxAge) return { reason: `受給開始年齢 ${startAge} 歳は制度の範囲（${P.minAge}〜${maxAge} 歳）外です` };
+  if (months < 0) {
+    const rate = P.early.find((x) => x.bornFromYm === null || birth >= parseYm(x.bornFromYm))!.ratePerMonth;
+    return { factor: 1 + rate * months, months };
+  }
+  if (months > 0 && months < 12) return { reason: '繰下げは 66 歳以降です' };
+  return { factor: 1 + P.deferralRatePerMonth * months, months };
+}
+
 registerExpander('pension', (e, api) => {
   const p = e.params;
-  if (!api.ctx.births.has(p.memberId)) {
+  const birth = api.ctx.births.get(p.memberId);
+  if (birth === undefined) {
     api.warn('MEMBER_UNRESOLVED', '受給者が見つかりません');
     return;
+  }
+  let annual = p.annualAmount;
+  if (p.claimAdjustment) {
+    const t = e.trigger;
+    const r = t.type === 'age' && t.memberId === p.memberId ? pensionClaimFactor(birth, t.age, t.month !== undefined) : { reason: '受給開始を受給者の年齢で指定してください' };
+    if ('reason' in r) api.warn('PENSION_CLAIM_NA', `繰上げ・繰下げの増減率を適用しません（${r.reason}）`);
+    else annual = p.annualAmount * r.factor;
   }
   api.addFlow({
     key: 'pension',
@@ -232,7 +259,7 @@ registerExpander('pension', (e, api) => {
     category: 'pension',
     from: api.month,
     to: api.ctx.end,
-    amount: p.annualAmount / 12, // 年額を月割り（丸めは計上時）
+    amount: annual / 12, // 年額を月割り（丸めは計上時）
     months: null,
     growth: p.slideRate === 0 ? { type: 'none' } : { type: 'fixed', rate: p.slideRate },
     growthBase: api.ctx.start,

@@ -97,7 +97,7 @@ def floor_yen(x: D) -> int:
 
 
 def monthly_rate(annual) -> D:
-    a = D(str(annual))
+    a = annual if isinstance(annual, D) else D(str(annual))
     if a == 0:
         return D(0)
     return (D(1) + a) ** (D(1) / D(12)) - D(1)
@@ -142,7 +142,8 @@ class Sim:
         self.rate = {}
         self.order = []
         for acc in sc["accounts"]:
-            self.add_account(acc["id"], acc["kind"], acc["openingBalance"], acc["annualRate"])
+            # 手数料は利回りから差し引く（§18）
+            self.add_account(acc["id"], acc["kind"], acc["openingBalance"], D(str(acc["annualRate"])) - D(str(acc.get("feeRate", 0))))
         self.cash = next(x["id"] for x in sc["accounts"] if x["kind"] == "cash")
         self.flows = []  # dict(dir, cat, from, to, amount, months, growth, base, step, src)
         self.transfers = []
@@ -164,7 +165,7 @@ class Sim:
     def flow_rule(self, f, frm, to, src):
         return {
             "dir": f["direction"], "cat": f["category"], "from": frm, "to": to,
-            "amount": f["amount"], "months": None if f["frequency"] == "monthly" else (f.get("months") or []),
+            "amount": (D(str(f["amount"])) * D(str(f["netRatio"]))) if (f["direction"] == "income" and f.get("netRatio") is not None) else f["amount"], "months": None if f["frequency"] == "monthly" else (f.get("months") or []),
             "growth": f["growth"], "base": self.start if f["growthBase"] == "start" else frm,
             "step": f["growthStepMonth"], "src": src,
         }
@@ -396,8 +397,23 @@ def expand_events(sim):
             elif t == "pension":
                 if p["memberId"] not in sim.births:
                     continue
+                annual = D(p["annualAmount"])
+                tr = e["trigger"]
+                if p.get("claimAdjustment") and tr["type"] == "age" and tr["memberId"] == p["memberId"] and not tr.get("month"):
+                    # 繰上げ: 0.4%/月（1962-04 以降生まれ）・0.5%/月（それより前）、60 歳から
+                    # 繰下げ: 0.7%/月、66 歳から、上限 75 歳（1952-04 以降生まれ）・70 歳（それより前）
+                    b = sim.births[p["memberId"]]
+                    age = tr["age"]
+                    months = (age - 65) * 12
+                    max_age = 75 if b >= ym("1952-04") else 70
+                    if 60 <= age <= max_age and not (0 < months < 12):
+                        if months < 0:
+                            rate = D("0.004") if b >= ym("1962-04") else D("0.005")
+                        else:
+                            rate = D("0.007")
+                        annual = annual * (D(1) + rate * months)
                 g = {"type": "none"} if p["slideRate"] == 0 else {"type": "fixed", "rate": p["slideRate"]}
-                _flow(sim, eid, "income", m, sim.end, D(p["annualAmount"]) / D(12), None, g, 4)
+                _flow(sim, eid, "income", m, sim.end, annual / D(12), None, g, 4)
         except Unresolved:
             continue
     # 終了指定: 発生月の前月で止める

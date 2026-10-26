@@ -104,6 +104,6 @@ export function newEvent(type: EventType, s: Scenario): LifeEvent {
         },
       };
     case 'pension':
-      return { ...base, type, trigger: { type: 'age', memberId: selfId, age: 65 }, params: { memberId: selfId, annualAmount: NaN, slideRate: 0 } };
+      return { ...base, type, trigger: { type: 'age', memberId: selfId, age: 65 }, params: { memberId: selfId, annualAmount: NaN, slideRate: 0, claimAdjustment: true } };
   }
 }
